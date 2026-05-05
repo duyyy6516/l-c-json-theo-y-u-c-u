@@ -2,38 +2,54 @@ import streamlit as st
 import pandas as pd
 import json
 
-st.set_page_config(layout="wide") # Mở rộng giao diện ra full màn hình
-st.title("Web lọc & Sắp xếp dữ liệu JSON")
+# Cấu hình trang
+st.set_page_config(page_title="JSON Data Viewer", layout="wide")
 
-# 1. Widget tải file lên
-uploaded_file = st.file_uploader("Chọn file JSON của bạn", type=['json'])
+st.title("📊 Công cụ Lọc & Sắp xếp dữ liệu JSON")
+st.markdown("Tải lên file JSON của bạn để xem, lọc và sắp xếp dữ liệu như Excel.")
+
+# 1. Widget tải file
+uploaded_file = st.file_uploader("Kéo thả hoặc chọn file JSON tại đây", type=['json'])
 
 if uploaded_file is not None:
-    # Đọc dữ liệu từ file được tải lên
     try:
-        data = json.load(uploaded_file)
-        df = pd.DataFrame(data)
+        # Đọc file
+        raw_data = json.load(uploaded_file)
         
-        st.success("File đã tải lên thành công!")
-
-        # 2. Hiển thị bảng có khả năng lọc và sắp xếp
-        # st.data_editor cho phép người dùng chỉnh sửa trực tiếp trên giao diện
-        # st.dataframe (bản mới) hỗ trợ mặc định việc bấm vào tiêu đề cột để sắp xếp
-        st.write("### Dữ liệu của bạn:")
-        st.info("💡 Mẹo: Bấm vào tiêu đề cột để sắp xếp tăng/giảm dần.")
+        # CHUẨN HÓA DỮ LIỆU: Xử lý cấu trúc lồng nhau
+        # Nếu data là một dict đơn, chuyển thành list để normalize
+        if isinstance(raw_data, dict):
+            raw_data = [raw_data]
         
-        # Sử dụng data_editor để người dùng có thể lọc/tìm kiếm trong trình duyệt
+        # Làm phẳng dữ liệu JSON (giải quyết vấn đề các key bị lặp hoặc lồng nhau)
+        df = pd.json_normalize(raw_data)
+        
+        # Loại bỏ các hàng trùng lặp hoàn toàn
+        df = df.drop_duplicates()
+        
+        st.success(f"Đã tải thành công {len(df)} dòng dữ liệu!")
+        
+        # 2. Hiển thị dữ liệu (Data Editor hỗ trợ sắp xếp và chỉnh sửa)
+        st.subheader("Bảng dữ liệu")
+        st.info("💡 Mẹo: Nhấp vào tiêu đề cột để sắp xếp, hoặc dùng ô tìm kiếm để lọc dữ liệu.")
+        
+        # Sử dụng data_editor để người dùng thao tác như Excel
         edited_df = st.data_editor(df, use_container_width=True)
         
-        # 3. Tính năng xuất file sau khi đã lọc/chỉnh sửa (giống Excel)
+        # 3. Tính năng xuất dữ liệu đã lọc/chỉnh sửa
+        st.divider()
+        st.subheader("Xuất dữ liệu")
+        csv = edited_df.to_csv(index=False).encode('utf-8')
+        
         st.download_button(
-            label="Tải về file CSV đã chỉnh sửa",
-            data=edited_df.to_csv(index=False).encode('utf-8'),
-            file_name='data_processed.csv',
+            label="Tải về file CSV",
+            data=csv,
+            file_name='processed_data.csv',
             mime='text/csv',
         )
         
     except Exception as e:
-        st.error(f"Lỗi khi đọc file: {e}")
+        st.error(f"Đã xảy ra lỗi khi xử lý file: {e}")
+        st.write("Vui lòng kiểm tra định dạng file JSON của bạn.")
 else:
-    st.warning("Vui lòng tải lên một file JSON để bắt đầu.")
+    st.warning("Vui lòng tải file lên để bắt đầu.")
