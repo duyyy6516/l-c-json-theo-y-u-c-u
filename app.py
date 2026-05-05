@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import json
 import re
 
@@ -29,9 +30,9 @@ def flatten_json(y):
     flatten(y)
     return out
 
-# 3. Trích xuất số từ chuỗi phức tạp (VD: 20-10-28/6.9)
+# 3. Trích xuất số từ chuỗi phức tạp
 def extract_complex_numbers(val):
-    if pd.isna(val) or val == "N/A" or val == "":
+    if pd.isna(val) or val == "":
         return None
     val_str = str(val).strip()
     if '/' in val_str:
@@ -52,16 +53,16 @@ if uploaded_file is not None:
         clean_json = normalize_keys(raw_data)
         df = pd.DataFrame([flatten_json(row) for row in clean_json])
         
-        # Bước 2: Làm sạch cột
+        # Bước 2: DỌN DẸP BẢNG SẠCH SẼ
         df = df.dropna(axis=1, how='all').loc[:, ~df.columns.duplicated()]
         
-        # SỬA LỖI HIỂN THỊ ĐỒNG NHẤT:
-        # Chuyển tất cả các chuỗi rỗng "" hoặc chỉ chứa khoảng trắng thành None (tức là NaN)
-        df = df.replace(r'^\s*$', None, regex=True)
-        # Sau đó fill toàn bộ NaN thành "N/A"
-        display_df = df.fillna("N/A")
+        # Biến toàn bộ chuỗi rỗng thành giá trị trống thực sự (NaN)
+        df = df.replace(r'^\s*$', np.nan, regex=True)
+        
+        # Không dùng "N/A" nữa, thay bằng ô trống "" cho giống Excel
+        display_df = df.fillna("")
 
-        # HIỂN THỊ BẢNG GỐC
+        # HIỂN THỊ BẢNG GỐC TRẮNG TINH
         st.subheader("📋 Bảng dữ liệu gốc")
         st.data_editor(display_df, use_container_width=True)
         
@@ -95,12 +96,15 @@ if uploaded_file is not None:
             cols_ui = st.columns(4)
             selected_keys = [k for i, k in enumerate(numeric_options) if cols_ui[i % 4].checkbox(k.upper(), key=f"c_{k}")]
 
+        # TÙY CHỌN MỚI: Lọc bỏ số 0 cho biểu đồ
+        ignore_zero = st.checkbox("🚫 Bỏ qua các giá trị 0 trên biểu đồ (coi như thiết bị lỗi / mất kết nối)", value=True)
+
         # NÚT TẠO BIỂU ĐỒ
         if st.button("🚀 TẠO BIỂU ĐỒ", type="primary"):
             if not selected_keys:
                 st.warning("Hãy chọn ít nhất 1 chỉ số!")
             else:
-                plot_df = df.copy() # Sử dụng df gốc (có None) để vẽ, không dùng display_df
+                plot_df = df.copy() 
                 
                 if time_col and start_d and end_d:
                     plot_df[time_col] = pd.to_datetime(plot_df[time_col].astype(str).str.replace('-', ':').str.replace(':', '-', 2), errors='coerce')
@@ -113,10 +117,15 @@ if uploaded_file is not None:
                     
                     clean_data = plot_df[col].apply(extract_complex_numbers)
                     chart_series = pd.to_numeric(clean_data, errors='coerce')
+                    
+                    # NẾU TÍCH VÀO NÚT "LỌC 0", BIẾN SỐ 0 THÀNH RỖNG ĐỂ KHÔNG VẼ
+                    if ignore_zero:
+                        chart_series = chart_series.replace(0, np.nan)
+                    
                     chart_series = chart_series.dropna()
                     
                     if chart_series.empty:
-                        st.info(f"Cột {col} chỉ chứa toàn rỗng hoặc lỗi, không có số để vẽ.")
+                        st.info(f"Cột {col} trống hoặc chỉ toàn số 0, không có dữ liệu để vẽ.")
                     else:
                         st.line_chart(chart_series)
                     st.write("---")
