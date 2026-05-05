@@ -52,8 +52,13 @@ if uploaded_file is not None:
         clean_json = normalize_keys(raw_data)
         df = pd.DataFrame([flatten_json(row) for row in clean_json])
         
-        # Bước 2: Làm sạch cột, điền N/A cho bảng dữ liệu gốc
+        # Bước 2: Làm sạch cột
         df = df.dropna(axis=1, how='all').loc[:, ~df.columns.duplicated()]
+        
+        # SỬA LỖI HIỂN THỊ ĐỒNG NHẤT:
+        # Chuyển tất cả các chuỗi rỗng "" hoặc chỉ chứa khoảng trắng thành None (tức là NaN)
+        df = df.replace(r'^\s*$', None, regex=True)
+        # Sau đó fill toàn bộ NaN thành "N/A"
         display_df = df.fillna("N/A")
 
         # HIỂN THỊ BẢNG GỐC
@@ -95,7 +100,7 @@ if uploaded_file is not None:
             if not selected_keys:
                 st.warning("Hãy chọn ít nhất 1 chỉ số!")
             else:
-                plot_df = df.copy()
+                plot_df = df.copy() # Sử dụng df gốc (có None) để vẽ, không dùng display_df
                 
                 if time_col and start_d and end_d:
                     plot_df[time_col] = pd.to_datetime(plot_df[time_col].astype(str).str.replace('-', ':').str.replace(':', '-', 2), errors='coerce')
@@ -107,17 +112,11 @@ if uploaded_file is not None:
                     st.write(f"**Biểu đồ: {col.upper()}**")
                     
                     clean_data = plot_df[col].apply(extract_complex_numbers)
-                    
-                    # QUAN TRỌNG: KHÔNG DÙNG fillna(0) NỮA
-                    # Biến N/A thành giá trị rỗng (NaN)
                     chart_series = pd.to_numeric(clean_data, errors='coerce')
-                    
-                    # XÓA BỎ CÁC ĐIỂM RỖNG ĐỂ BIỂU ĐỒ KHÔNG RỚT XUỐNG 0
                     chart_series = chart_series.dropna()
                     
-                    # Kiểm tra xem sau khi lọc N/A, cột đó có còn dữ liệu nào không
                     if chart_series.empty:
-                        st.info(f"Cột {col} chỉ chứa toàn 'N/A' hoặc lỗi, không có số để vẽ.")
+                        st.info(f"Cột {col} chỉ chứa toàn rỗng hoặc lỗi, không có số để vẽ.")
                     else:
                         st.line_chart(chart_series)
                     st.write("---")
