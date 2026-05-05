@@ -27,17 +27,3 @@ if uploaded_file is not None:
         
         st.subheader("Bảng dữ liệu sau khi Load:")
         st.dataframe(df, use_container_width=True)
-        
-        # Khu vực vẽ biểu đồ
-        st.divider()
-        st.subheader("Chọn cột để vẽ")
-        selected_cols = st.multiselect("Chọn:", df.columns.tolist())
-        
-        if st.button("Vẽ"):
-            for col in selected_cols:
-                # Ép kiểu sang số, nếu là chữ thì bỏ qua
-                col_data = pd.to_numeric(df[col], errors='coerce')
-                st.line_chart(col_data)
-
-    except Exception as e:
-        st.error(f"Lỗi: {e}")
