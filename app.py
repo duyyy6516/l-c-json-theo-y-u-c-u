@@ -6,16 +6,15 @@ import re
 st.set_page_config(page_title="JSON Data Pro", layout="wide")
 st.title("📊 Công cụ Phân tích Dữ liệu JSON")
 
-# 1. Hàm đồng nhất Key (Đưa tất cả về chữ thường để chống lặp cột)
+# 1. Đồng nhất Key (Viết thường hết để tránh trùng cột Nhiệt độ/nhiệt độ)
 def normalize_keys(data):
     if isinstance(data, list):
         return [normalize_keys(item) for item in data]
     elif isinstance(data, dict):
-        # Chuyển key về chữ thường ngay từ đầu
         return {str(k).lower(): normalize_keys(v) for k, v in data.items()}
     return data
 
-# 2. Hàm làm phẳng mọi cấu trúc JSON lồng nhau
+# 2. Làm phẳng JSON sâu (Flatten)
 def flatten_json(y):
     out = {}
     def flatten(x, name=''):
@@ -30,10 +29,10 @@ def flatten_json(y):
     flatten(y)
     return out
 
-# 3. Hàm trích xuất số cho các cột đo đạc phức tạp (như EC, PH)
+# 3. Trích xuất số từ chuỗi phức tạp (VD: 20-10-28/6.9)
 def extract_complex_numbers(val):
-    if pd.isna(val) or val == "N/A":
-        return val
+    if pd.isna(val) or val == "N/A" or val == "":
+        return None
     val_str = str(val).strip()
     if '/' in val_str:
         matches = re.findall(r'/([0-9.]+)', val_str)
@@ -46,89 +45,81 @@ uploaded_file = st.file_uploader("Tải lên file JSON của bạn", type=['json
 
 if uploaded_file is not None:
     try:
-        # Load dữ liệu
-        data = json.load(uploaded_file)
-        if isinstance(data, dict): data = [data]
+        raw_data = json.load(uploaded_file)
+        if isinstance(raw_data, dict): raw_data = [raw_data]
         
-        # ĐỒNG NHẤT KEY trước khi làm phẳng
-        clean_data = normalize_keys(data)
+        # Bước 1: Đồng nhất và làm phẳng
+        clean_json = normalize_keys(raw_data)
+        df = pd.DataFrame([flatten_json(row) for row in clean_json])
         
-        # Làm phẳng dữ liệu
-        df = pd.DataFrame([flatten_json(row) for row in clean_data])
-        df = df.dropna(axis=1, how='all').loc[:, ~df.columns.duplicated()].fillna("N/A")
+        # Bước 2: Làm sạch cột (Bỏ cột rỗng, điền N/A để dễ nhìn trong bảng)
+        df = df.dropna(axis=1, how='all').loc[:, ~df.columns.duplicated()]
+        display_df = df.fillna("N/A")
 
-        # --- BẢNG DỮ LIỆU GỐC ---
+        # HIỂN THỊ BẢNG GỐC
         st.subheader("📋 Bảng dữ liệu gốc")
-        st.data_editor(df, use_container_width=True)
+        st.data_editor(display_df, use_container_width=True)
         
         st.divider()
 
-        # --- KHU VỰC THIẾT LẬP ---
-        st.subheader("⚙️ Thiết lập biểu đồ")
+        # THIẾT LẬP BIỂU ĐỒ
+        st.subheader("⚙️ Thiết lập & Vẽ biểu đồ")
         
+        # Tìm cột thời gian
         time_col = next((col for col in df.columns if 'time' in col.lower() or 'thời gian' in col.lower()), None)
         
         col1, col2 = st.columns([1, 2])
         
         with col1:
-            st.write("Chọn khoảng thời gian:")
             if time_col:
-                temp_dates = pd.to_datetime(df[time_col].astype(str).str.replace('-', ':').str.replace(':', '-', 2), errors='coerce')
-                valid_dates = temp_dates.dropna()
-                
-                if not valid_dates.empty:
-                    min_date = valid_dates.min().date()
-                    max_date = valid_dates.max().date()
-                    
-                    date_selection = st.date_input(
-                        "Giới hạn trong dữ liệu thực tế:", 
-                        value=(min_date, max_date),
-                        min_value=min_date,
-                        max_value=max_date
-                    )
-                    
-                    if len(date_selection) == 2:
-                        start_date, end_date = date_selection
-                    else:
-                        start_date, end_date = date_selection[0], date_selection[0]
+                # Xử lý thời gian chuẩn để lấy min/max
+                t_dates = pd.to_datetime(df[time_col].astype(str).str.replace('-', ':').str.replace(':', '-', 2), errors='coerce')
+                valid_ts = t_dates.dropna()
+                if not valid_ts.empty:
+                    min_d, max_d = valid_ts.min().date(), valid_ts.max().date()
+                    sel_date = st.date_input("Khoảng thời gian:", value=(min_d, max_d), min_value=min_d, max_value=max_d)
+                    if len(sel_date) == 2: start_d, end_d = sel_date
+                    else: start_d, end_d = sel_date[0], sel_date[0]
                 else:
-                    st.warning("Không có dữ liệu thời gian hợp lệ.")
-                    start_date, end_date = None, None
+                    st.warning("Thời gian không hợp lệ")
+                    start_d, end_d = None, None
             else:
-                st.info("Không tìm thấy cột thời gian.")
-                start_date, end_date = None, None
+                st.info("Không có cột thời gian")
+                start_d, end_d = None, None
 
         with col2:
-            st.write("Chọn các chỉ số (tích vào ô):")
-            numeric_cols = [c for c in df.columns if c != time_col and '_id' not in c]
-            cols_check = st.columns(4)
-            selected_keys = [key for i, key in enumerate(numeric_cols) if cols_check[i % 4].checkbox(key.upper(), key=f"check_{key}")]
+            # Lấy danh sách cột có thể vẽ (loại trừ ID và thời gian)
+            numeric_options = [c for c in df.columns if c != time_col and '_id' not in c]
+            cols_ui = st.columns(4)
+            selected_keys = [k for i, k in enumerate(numeric_options) if cols_ui[i % 4].checkbox(k.upper(), key=f"c_{k}")]
 
-        # --- NÚT TẠO BIỂU ĐỒ ---
+        # NÚT TẠO BIỂU ĐỒ
         if st.button("🚀 TẠO BIỂU ĐỒ", type="primary"):
             if not selected_keys:
-                st.warning("Vui lòng chọn ít nhất một chỉ số!")
+                st.warning("Hãy chọn ít nhất 1 chỉ số!")
             else:
+                # Tạo bản sao để xử lý riêng cho việc vẽ hình
                 plot_df = df.copy()
                 
-                if time_col and start_date and end_date:
+                if time_col and start_d and end_d:
                     plot_df[time_col] = pd.to_datetime(plot_df[time_col].astype(str).str.replace('-', ':').str.replace(':', '-', 2), errors='coerce')
                     plot_df = plot_df.dropna(subset=[time_col])
-                    
-                    mask = (plot_df[time_col].dt.date >= start_date) & (plot_df[time_col].dt.date <= end_date)
-                    plot_df = plot_df[mask]
-                    plot_df = plot_df.set_index(time_col)
-                
+                    mask = (plot_df[time_col].dt.date >= start_d) & (plot_df[time_col].dt.date <= end_d)
+                    plot_df = plot_df[mask].set_index(time_col)
+
                 for col in selected_keys:
                     st.write(f"**Biểu đồ: {col.upper()}**")
                     
-                    # Trích xuất số (Dành cho các cột phức tạp như PH, EC)
-                    clean_series = plot_df[col].apply(extract_complex_numbers)
+                    # Bước quan trọng: Chuyển N/A hoặc chữ thành số, cái gì không phải số thì thành 0
+                    # extract_complex_numbers xử lý vụ PH (20-10/6.9)
+                    clean_data = plot_df[col].apply(extract_complex_numbers)
+                    chart_series = pd.to_numeric(clean_data, errors='coerce').fillna(0)
                     
-                    # Vẽ biểu đồ
-                    series = pd.to_numeric(clean_series, errors='coerce').fillna(0)
-                    st.line_chart(series)
+                    if chart_series.sum() == 0 and chart_series.mean() == 0:
+                        st.info(f"Cột {col} không có dữ liệu số để hiển thị.")
+                    else:
+                        st.line_chart(chart_series)
                     st.write("---")
 
     except Exception as e:
-        st.error(f"Lỗi xử lý file: {e}")
+        st.error(f"Lỗi: {e}")
