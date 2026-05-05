@@ -51,11 +51,31 @@ if uploaded_file is not None:
             if time_col:
                 # Ép kiểu thời gian tạm thời để lấy min/max cho bộ lọc
                 temp_dates = pd.to_datetime(df[time_col].astype(str).str.replace('-', ':').str.replace(':', '-', 2), errors='coerce')
-                min_date = temp_dates.min().date() if pd.notna(temp_dates.min()) else pd.to_datetime('today').date()
-                max_date = temp_dates.max().date() if pd.notna(temp_dates.max()) else pd.to_datetime('today').date()
-                start_date, end_date = st.date_input("Chọn:", value=(min_date, max_date))
+                valid_dates = temp_dates.dropna() # Loại bỏ các dòng lỗi để lấy mốc chính xác nhất
+                
+                if not valid_dates.empty:
+                    min_date = valid_dates.min().date()
+                    max_date = valid_dates.max().date()
+                    
+                    # THÊM min_value VÀ max_value ĐỂ KHÓA BỘ LỌC
+                    date_selection = st.date_input(
+                        "Chọn (Bị khóa trong khoảng dữ liệu có thực):", 
+                        value=(min_date, max_date),
+                        min_value=min_date,
+                        max_value=max_date
+                    )
+                    
+                    # Tránh lỗi khi người dùng chỉ bấm chọn 1 ngày duy nhất
+                    if len(date_selection) == 2:
+                        start_date, end_date = date_selection
+                    else:
+                        start_date, end_date = date_selection[0], date_selection[0]
+                else:
+                    st.warning("Không có dữ liệu thời gian hợp lệ.")
+                    start_date, end_date = None, None
             else:
                 st.info("Không tìm thấy cột thời gian.")
+                start_date, end_date = None, None
 
         with col2:
             st.write("Chọn các chỉ số (tích vào ô):")
@@ -72,9 +92,10 @@ if uploaded_file is not None:
                 plot_df = df.copy()
                 
                 # Xử lý thời gian cho biểu đồ
-                if time_col:
+                if time_col and start_date and end_date:
                     plot_df[time_col] = pd.to_datetime(plot_df[time_col].astype(str).str.replace('-', ':').str.replace(':', '-', 2), errors='coerce')
                     plot_df = plot_df.dropna(subset=[time_col])
+                    
                     # Lọc theo thời gian đã chọn
                     mask = (plot_df[time_col].dt.date >= start_date) & (plot_df[time_col].dt.date <= end_date)
                     plot_df = plot_df[mask]
