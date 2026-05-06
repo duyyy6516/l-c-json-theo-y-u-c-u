@@ -5,7 +5,7 @@ import json
 import re
 
 st.set_page_config(page_title="JSON Data Pro", layout="wide")
-st.title("📊 Công cụ Phân tích Dữ liệu Hệ thống")
+st.title("📊 Công cụ Phân tích JSON")
 
 def normalize_keys(data):
     if isinstance(data, list):
@@ -85,7 +85,6 @@ if uploaded_file is not None:
             cols_ui = st.columns(4)
             selected_keys = [k for i, k in enumerate(numeric_options) if cols_ui[i % 4].checkbox(k.upper(), key=f"c_{k}")]
             
-            ignore_zero = st.checkbox("🚫 Xóa bỏ giá trị 0", value=False)
             show_debug = st.checkbox("🐛 Hiển thị bảng chi tiết các điểm đã lọc", value=False)
 
         if st.button("🚀 TẠO BIỂU ĐỒ", type="primary"):
@@ -139,7 +138,7 @@ if uploaded_file is not None:
                         if not series.empty:
                             st.line_chart(series)
                             if show_debug:
-                                with st.expander("🔍 Xem dữ liệu sau khi làm mượt"):
+                                with st.expander("🔍 Xem dữ liệu"):
                                     st.dataframe(series)
                         else:
                             st.warning(f"Cột {col} không có dữ liệu hợp lệ để vẽ sau khi lọc.")
