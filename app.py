@@ -2,19 +2,20 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import json
+import re
 
 st.set_page_config(page_title="JSON Data Pro", layout="wide")
-st.title("📊 Công cụ Phân tích Dữ liệu JSON")
+st.title("📊 Công cụ Phân tích Dữ liệu Hệ thống")
 
-# 1. Đồng nhất Key
+# 1. Đồng nhất Key (Thêm tính năng diệt dấu cách ẩn ở Key)
 def normalize_keys(data):
     if isinstance(data, list):
         return [normalize_keys(item) for item in data]
     elif isinstance(data, dict):
-        return {str(k).lower(): normalize_keys(v) for k, v in data.items()}
+        # Hàm .strip() sẽ xóa sạch mọi dấu cách thừa ở đầu và cuối tên cột (vd: "PH " -> "ph")
+        return {str(k).strip().lower(): normalize_keys(v) for k, v in data.items()}
     return data
 
-# 2. Làm phẳng JSON sâu (Flatten)
 def flatten_json(y):
     out = {}
     def flatten(x, name=''):
@@ -29,7 +30,7 @@ def flatten_json(y):
     flatten(y)
     return out
 
-uploaded_file = st.file_uploader("Tải lên file JSON của bạn", type=['json'])
+uploaded_file = st.file_uploader("Tải lên file JSON", type=['json'])
 
 if uploaded_file is not None:
     try:
@@ -39,19 +40,16 @@ if uploaded_file is not None:
         clean_json = normalize_keys(raw_data)
         df = pd.DataFrame([flatten_json(row) for row in clean_json])
         
-        # Dọn dẹp bảng
         df = df.dropna(axis=1, how='all').loc[:, ~df.columns.duplicated()]
         df = df.replace(r'^\s*$', np.nan, regex=True)
         display_df = df.fillna("")
 
-        # HIỂN THỊ BẢNG GỐC
-        st.subheader("📋 Bảng dữ liệu gốc")
+        st.subheader(f"📋 Bảng dữ liệu gốc ({len(df)} dòng)")
         st.data_editor(display_df, use_container_width=True)
         
         st.divider()
 
-        # THIẾT LẬP BIỂU ĐỒ
-        st.subheader("⚙️ Thiết lập & Vẽ biểu đồ")
+        st.subheader("⚙️ Thiết lập biểu đồ tổng hợp")
         
         time_col = next((col for col in df.columns if 'time' in col.lower() or 'thời gian' in col.lower()), None)
         
@@ -63,85 +61,82 @@ if uploaded_file is not None:
                 valid_ts = t_dates.dropna()
                 if not valid_ts.empty:
                     min_d, max_d = valid_ts.min().date(), valid_ts.max().date()
-                    sel_date = st.date_input("Khoảng thời gian:", value=(min_d, max_d), min_value=min_d, max_value=max_d)
-                    if len(sel_date) == 2: start_d, end_d = sel_date
-                    else: start_d, end_d = sel_date[0], sel_date[0]
+                    sel_date = st.date_input("Lọc theo ngày:", value=(min_d, max_d), min_value=min_d, max_value=max_d)
+                    start_d, end_d = (sel_date[0], sel_date[1]) if len(sel_date) == 2 else (sel_date[0], sel_date[0])
                 else:
-                    st.warning("Thời gian không hợp lệ")
+                    st.warning("Không tìm thấy ngày hợp lệ")
                     start_d, end_d = None, None
             else:
                 st.info("Không có cột thời gian")
                 start_d, end_d = None, None
 
         with col2:
-            numeric_options = [c for c in df.columns if c != time_col and '_id' not in c]
+            exclude = [time_col, 'stt', 'tên khu', 'trạng thái', 'phương thức hoạt động', 'người điều khiển']
+            numeric_options = [c for c in df.columns if c not in exclude and '_id' not in c]
             cols_ui = st.columns(4)
             selected_keys = [k for i, k in enumerate(numeric_options) if cols_ui[i % 4].checkbox(k.upper(), key=f"c_{k}")]
 
-        ignore_zero = st.checkbox("🚫 Bỏ qua các giá trị 0 trên biểu đồ (coi như thiết bị lỗi / mất kết nối)", value=True)
+        ignore_zero = st.checkbox("🚫 Loại bỏ giá trị 0", value=True)
+        show_debug = st.checkbox("🐛 Hiển thị bảng chi tiết các điểm đã lọc (Nên bật để kiểm tra)", value=True)
 
-        # NÚT TẠO BIỂU ĐỒ
         if st.button("🚀 TẠO BIỂU ĐỒ", type="primary"):
             if not selected_keys:
                 st.warning("Hãy chọn ít nhất 1 chỉ số!")
             else:
-                plot_df = df.copy() 
-                
+                working_df = df.copy()
                 if time_col and start_d and end_d:
-                    plot_df[time_col] = pd.to_datetime(plot_df[time_col].astype(str).str.replace('-', ':').str.replace(':', '-', 2), errors='coerce')
-                    plot_df = plot_df.dropna(subset=[time_col])
-                    mask = (plot_df[time_col].dt.date >= start_d) & (plot_df[time_col].dt.date <= end_d)
-                    plot_df = plot_df[mask].set_index(time_col)
+                    working_df[time_col] = pd.to_datetime(working_df[time_col].astype(str).str.replace('-', ':').str.replace(':', '-', 2), errors='coerce')
+                    working_df = working_df.dropna(subset=[time_col])
+                    mask = (working_df[time_col].dt.date >= start_d) & (working_df[time_col].dt.date <= end_d)
+                    working_df = working_df[mask]
 
                 for col in selected_keys:
-                    st.write(f"**Biểu đồ: {col.upper()}**")
+                    st.write(f"### Phân tích: {col.upper()}")
                     
-                    # KIỂM TRA: Cột này là số thường hay chuỗi phức tạp chứa "/"?
-                    is_complex = plot_df[col].astype(str).str.contains('/').any()
-                    
-                    if is_complex:
-                        # Bóc tách từng mốc thời gian chi tiết
-                        detailed_data = []
-                        for main_time, row in plot_df.iterrows():
-                            val = str(row[col]).strip()
-                            if val and val.lower() != "nan":
-                                # Tách các cụm "20-10-28/6.9"
-                                pairs = val.split()
-                                for p in pairs:
-                                    if '/' in p:
-                                        try:
-                                            # Tách thời gian và giá trị
-                                            t_str, v_str = p.split('/', 1)
-                                            # Lấy "Ngày" từ main_time ghép với "Giờ:Phút:Giây" từ chuỗi
-                                            date_part = main_time.strftime('%Y-%m-%d')
-                                            exact_time_str = f"{date_part} {t_str.replace('-', ':')}"
-                                            
-                                            exact_time = pd.to_datetime(exact_time_str)
-                                            detailed_data.append({'Time': exact_time, 'Value': float(v_str)})
-                                        except:
-                                            pass
+                    all_points = []
+                    for idx, row in working_df.iterrows():
+                        main_time = row[time_col]
+                        val = str(row[col]).strip()
                         
-                        if detailed_data:
-                            # Tạo DataFrame mới từ các điểm chi tiết này
-                            chart_df = pd.DataFrame(detailed_data).set_index('Time')
-                            chart_df = chart_df.sort_index() # Sắp xếp thời gian theo thứ tự chuẩn
-                            chart_series = chart_df['Value']
+                        if val and val.lower() != 'nan':
+                            # BỘ QUÉT TỐI THƯỢNG: Chỉ quét và gắp đúng mẫu "2 số - 2 số - 2 số / 1 dãy số"
+                            matches = re.findall(r'(\d{2}-\d{2}-\d{2})/([-+]?\d*\.?\d+)', val)
+                            
+                            if matches:
+                                for t_str, v_str in matches:
+                                    try:
+                                        full_t_str = f"{main_time.strftime('%Y-%m-%d')} {t_str.replace('-', ':')}"
+                                        full_t = pd.to_datetime(full_t_str)
+                                        all_points.append({'Thời gian': full_t, 'Giá trị': float(v_str)})
+                                    except: pass
+                            else:
+                                # Nếu là số bình thường không có dấu / (như Lưu lượng m2/h)
+                                num_match = re.search(r'[-+]?\d*\.?\d+', val)
+                                if num_match:
+                                    try:
+                                        all_points.append({'Thời gian': main_time, 'Giá trị': float(num_match.group())})
+                                    except: pass
+
+                    # VẼ BIỂU ĐỒ VÀ HIỂN THỊ KẾT QUẢ QUÉT
+                    if all_points:
+                        chart_df = pd.DataFrame(all_points).sort_values('Thời gian').set_index('Thời gian')
+                        series = chart_df['Giá trị']
+                        
+                        if ignore_zero:
+                            series = series.replace(0, np.nan).dropna()
+                        
+                        if not series.empty:
+                            st.line_chart(series)
+                            st.success(f"✅ Đã quét và vẽ thành công {len(series)} điểm dữ liệu.")
+                            
+                            if show_debug:
+                                with st.expander("🔍 Bấm vào đây để xem máy tính đã 'gắp' được những số nào từ biểu đồ này"):
+                                    st.dataframe(chart_df)
                         else:
-                            chart_series = pd.Series(dtype=float)
+                            st.warning(f"Cột {col} trống hoặc chỉ toàn số 0.")
                     else:
-                        # Nếu là số bình thường (như Lưu lượng m2/h)
-                        chart_series = pd.to_numeric(plot_df[col], errors='coerce')
-                    
-                    # Lọc N/A và số 0
-                    if ignore_zero:
-                        chart_series = chart_series.replace(0, np.nan)
-                    chart_series = chart_series.dropna()
-                    
-                    if chart_series.empty:
-                        st.info(f"Cột {col} trống hoặc không có dữ liệu hợp lệ để vẽ.")
-                    else:
-                        st.line_chart(chart_series)
+                        st.error(f"❌ Máy quét đã chạy nhưng không thể gắp được số nào từ cột {col}. Dữ liệu có thể đang bị hỏng định dạng hoàn toàn.")
                     st.write("---")
 
     except Exception as e:
-        st.error(f"Lỗi: {e}")
+        st.error(f"Lỗi hệ thống: {e}")
