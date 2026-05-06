@@ -3,10 +3,10 @@ import pandas as pd
 import numpy as np
 import json
 import re
-import plotly.express as px  # <-- ĐÂY LÀ THƯ VIỆN BIỂU ĐỒ CHUYÊN NGHIỆP
+import plotly.express as px # Thư viện vẽ biểu đồ chuyên nghiệp
 
 st.set_page_config(page_title="JSON Data Pro", layout="wide")
-st.title("📊 Công cụ Phân tích & Kiểm tra Dữ liệu")
+st.title("📊 Công cụ Phân tích Dữ liệu Hệ thống (X-Y Axis)")
 
 # 1. Đồng nhất Key
 def normalize_keys(data):
@@ -16,7 +16,7 @@ def normalize_keys(data):
         return {str(k).strip().lower(): normalize_keys(v) for k, v in data.items()}
     return data
 
-# 2. Làm phẳng JSON (Flatten)
+# 2. Làm phẳng JSON
 def flatten_json(y):
     out = {}
     def flatten(x, name=''):
@@ -41,22 +41,19 @@ if uploaded_file is not None:
         clean_json = normalize_keys(raw_data)
         df = pd.DataFrame([flatten_json(row) for row in clean_json])
         
-        # Làm sạch cột
         df = df.dropna(axis=1, how='all').loc[:, ~df.columns.duplicated()]
         df = df.replace(r'^\s*$', np.nan, regex=True)
         display_df = df.fillna("")
 
-        # --- BẢNG DỮ LIỆU TỔNG ---
         st.subheader(f"📋 Bảng dữ liệu gốc ({len(df)} bản ghi)")
         st.data_editor(display_df, use_container_width=True)
         
         st.divider()
 
-        # --- THIẾT LẬP ---
-        st.subheader("⚙️ Thiết lập biểu đồ & Bảng đối chiếu")
+        st.subheader("⚙️ Thiết lập biểu đồ & Đối chiếu X-Y")
         
-        start_d, end_d = None, None
         time_col = next((col for col in df.columns if 'time' in col.lower() or 'thời gian' in col.lower()), None)
+        start_d, end_d = None, None
         
         col1, col2 = st.columns([1, 2])
         
@@ -68,33 +65,22 @@ if uploaded_file is not None:
                     min_d, max_d = valid_ts.min().date(), valid_ts.max().date()
                     sel_date = st.date_input("Lọc theo ngày:", value=(min_d, max_d), min_value=min_d, max_value=max_d)
                     start_d, end_d = (sel_date[0], sel_date[1]) if len(sel_date) == 2 else (sel_date[0], sel_date[0])
-                else:
-                    st.warning("Không tìm thấy ngày hợp lệ")
-            else:
-                st.info("Không có cột thời gian")
-                
+            
             resample_choice = st.selectbox(
-                "Độ chi tiết dữ liệu (Làm mượt):",
-                ["Từng giây (Nguyên bản)", "Trung bình mỗi phút", "Trung bình mỗi 5 phút", "Trung bình mỗi 10 phút"]
+                "Làm mượt dữ liệu:",
+                ["Nguyên bản", "Trung bình mỗi phút", "Trung bình mỗi 5 phút"]
             )
-            resample_dict = {
-                "Từng giây (Nguyên bản)": None,
-                "Trung bình mỗi phút": "1min",
-                "Trung bình mỗi 5 phút": "5min",
-                "Trung bình mỗi 10 phút": "10min"
-            }
+            resample_dict = {"Nguyên bản": None, "Trung bình mỗi phút": "1min", "Trung bình mỗi 5 phút": "5min"}
 
         with col2:
             exclude = [time_col, 'stt', 'tên khu', 'trạng thái', 'phương thức hoạt động', 'người điều khiển']
             numeric_options = [c for c in df.columns if c not in exclude and '_id' not in c]
-            st.write("Chọn các chỉ số muốn kiểm tra:")
+            st.write("Chọn chỉ số vẽ biểu đồ:")
             cols_ui = st.columns(4)
             selected_keys = [k for i, k in enumerate(numeric_options) if cols_ui[i % 4].checkbox(k.upper(), key=f"c_{k}")]
             
-            # Nút khóa cứng biểu đồ cho ai không thích nó zoom/kéo thả
-            lock_chart = st.checkbox("🔒 Khóa cứng biểu đồ (Không cho zoom hay kéo trượt)", value=False)
+            lock_axis = st.checkbox("🔒 Khóa cứng trục biểu đồ (Không cho kéo trượt)", value=True)
 
-        # --- NÚT TẠO ---
         if st.button("🚀 TẠO BIỂU ĐỒ & BẢNG ĐỐI CHIẾU", type="primary"):
             if not selected_keys:
                 st.warning("Hãy chọn ít nhất 1 chỉ số!")
@@ -107,74 +93,55 @@ if uploaded_file is not None:
                     working_df = working_df[mask]
 
                 for col in selected_keys:
-                    st.write(f"## Chỉ số: {col.upper()}")
-                    
                     all_points = []
                     for idx, row in working_df.iterrows():
                         main_time = row[time_col]
                         val = str(row[col]).strip()
-                        
                         if val and val.lower() != 'nan':
                             matches = re.findall(r'(\d{2}-\d{2}-\d{2})/([-+]?\d*\.?\d+)', val)
                             if matches:
                                 for t_str, v_str in matches:
                                     try:
                                         full_t_str = f"{main_time.strftime('%Y-%m-%d')} {t_str.replace('-', ':')}"
-                                        all_points.append({'Thời gian': pd.to_datetime(full_t_str), 'Giá trị': float(v_str)})
+                                        all_points.append({'TG': pd.to_datetime(full_t_str), 'Giá trị': float(v_str)})
                                     except: pass
                             else:
                                 num_match = re.search(r'[-+]?\d*\.?\d+', val)
                                 if num_match:
-                                    try:
-                                        all_points.append({'Thời gian': main_time, 'Giá trị': float(num_match.group())})
-                                    except: pass
+                                    all_points.append({'TG': main_time, 'Giá trị': float(num_match.group())})
 
                     if all_points:
                         chart_df = pd.DataFrame(all_points)
-                        series = chart_df.groupby('Thời gian')['Giá trị'].mean().sort_index()
-                        series = series.dropna()
+                        # Gom nhóm và sắp xếp theo TG
+                        final_series = chart_df.groupby('TG')['Giá trị'].mean().sort_index()
                         
                         rule = resample_dict[resample_choice]
-                        if rule and not series.empty:
-                            series = series.resample(rule).mean().dropna()
+                        if rule and not final_series.empty:
+                            final_series = final_series.resample(rule).mean().dropna()
 
-                        if not series.empty:
-                            # 1. Chuẩn bị dữ liệu vẽ
-                            check_df = series.reset_index()
-                            check_df.columns = ['Thời gian', 'Giá trị']
+                        if not final_series.empty:
+                            plot_data = final_series.reset_index()
+                            plot_data.columns = ['TG', 'Giá trị']
+
+                            st.write(f"### Biểu đồ: {col.upper()}")
                             
-                            st.write("📈 **Biểu đồ xu hướng (Plotly):**")
+                            # Vẽ bằng Plotly
+                            fig = px.line(plot_data, x='TG', y='Giá trị', markers=True)
                             
-                            # 2. VẼ BẰNG PLOTLY ĐỂ ÉP HIỂN THỊ CHÍNH XÁC GIỜ PHÚT GIÂY
-                            fig = px.line(check_df, x='Thời gian', y='Giá trị', markers=True)
-                            
-                            # Ép định dạng Tooltip (Hiện đầy đủ Ngày Tháng Năm Giờ Phút Giây)
-                            fig.update_traces(
-                                hovertemplate="<b>Thời gian:</b> %{x|%Y-%m-%d %H:%M:%S}<br><b>Giá trị:</b> %{y}<extra></extra>"
-                            )
-                            
-                            # Tùy chỉnh Layout: Khóa trục nếu người dùng tích vào checkbox
+                            # Định dạng trục và Tooltip
+                            fig.update_traces(hovertemplate="<b>TG:</b> %{x|%Y-%m-%d %H:%M:%S}<br><b>Giá trị:</b> %{y}<extra></extra>")
                             fig.update_layout(
-                                xaxis=dict(fixedrange=lock_chart), # Khóa zoom/trượt trục X
-                                yaxis=dict(fixedrange=lock_chart), # Khóa zoom/trượt trục Y
-                                hovermode="x unified", # Gióng một đường thẳng xuống trục X khi di chuột (Cực kỳ dễ nhìn)
-                                xaxis_title="Mốc Thời Gian",
-                                yaxis_title="Giá Trị"
+                                xaxis_title="Thời gian (TG)",
+                                yaxis_title=f"Giá trị ({col.upper()})",
+                                xaxis=dict(fixedrange=lock_axis), # Khóa trục X
+                                yaxis=dict(fixedrange=lock_axis), # Khóa trục Y
+                                hovermode="x unified"
                             )
-                            
-                            # Hiển thị biểu đồ Plotly
                             st.plotly_chart(fig, use_container_width=True)
                             
-                            # 3. Tạo bảng Excel đối chiếu
-                            st.write("📂 **Bảng đối chiếu giá trị (Excel Style):**")
-                            st.dataframe(check_df, use_container_width=True)
-                            
-                            st.success(f"Đã hiển thị {len(check_df)} điểm dữ liệu.")
-                        else:
-                            st.warning(f"Cột {col} không có dữ liệu số sau khi lọc.")
-                    else:
-                        st.error(f"❌ Không tìm thấy dữ liệu cho {col}.")
+                            # Bảng đối chiếu ngay dưới biểu đồ
+                            with st.expander(f"Xem bảng đối chiếu giá trị cho {col.upper()}"):
+                                st.dataframe(plot_data, use_container_width=True)
                     st.write("---")
-
     except Exception as e:
         st.error(f"Lỗi: {e}")
