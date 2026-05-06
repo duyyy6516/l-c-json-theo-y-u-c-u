@@ -3,11 +3,12 @@ import pandas as pd
 import numpy as np
 import json
 import re
+import plotly.express as px  # <-- ĐÂY LÀ THƯ VIỆN BIỂU ĐỒ CHUYÊN NGHIỆP
 
 st.set_page_config(page_title="JSON Data Pro", layout="wide")
-st.title("📊 Công cụ Phân tích JSON ")
+st.title("📊 Công cụ Phân tích & Kiểm tra Dữ liệu")
 
-# 1. Đồng nhất Key (Viết thường và xóa khoảng trắng thừa)
+# 1. Đồng nhất Key
 def normalize_keys(data):
     if isinstance(data, list):
         return [normalize_keys(item) for item in data]
@@ -89,6 +90,9 @@ if uploaded_file is not None:
             st.write("Chọn các chỉ số muốn kiểm tra:")
             cols_ui = st.columns(4)
             selected_keys = [k for i, k in enumerate(numeric_options) if cols_ui[i % 4].checkbox(k.upper(), key=f"c_{k}")]
+            
+            # Nút khóa cứng biểu đồ cho ai không thích nó zoom/kéo thả
+            lock_chart = st.checkbox("🔒 Khóa cứng biểu đồ (Không cho zoom hay kéo trượt)", value=False)
 
         # --- NÚT TẠO ---
         if st.button("🚀 TẠO BIỂU ĐỒ & BẢNG ĐỐI CHIẾU", type="primary"):
@@ -111,7 +115,6 @@ if uploaded_file is not None:
                         val = str(row[col]).strip()
                         
                         if val and val.lower() != 'nan':
-                            # Xử lý dữ liệu con (PH/EC/AS)
                             matches = re.findall(r'(\d{2}-\d{2}-\d{2})/([-+]?\d*\.?\d+)', val)
                             if matches:
                                 for t_str, v_str in matches:
@@ -120,7 +123,6 @@ if uploaded_file is not None:
                                         all_points.append({'Thời gian': pd.to_datetime(full_t_str), 'Giá trị': float(v_str)})
                                     except: pass
                             else:
-                                # Dữ liệu số đơn giản
                                 num_match = re.search(r'[-+]?\d*\.?\d+', val)
                                 if num_match:
                                     try:
@@ -128,29 +130,46 @@ if uploaded_file is not None:
                                     except: pass
 
                     if all_points:
-                        # Gom dữ liệu thành Series
                         chart_df = pd.DataFrame(all_points)
                         series = chart_df.groupby('Thời gian')['Giá trị'].mean().sort_index()
                         series = series.dropna()
                         
-                        # Làm mượt (Resample)
                         rule = resample_dict[resample_choice]
                         if rule and not series.empty:
                             series = series.resample(rule).mean().dropna()
 
                         if not series.empty:
-                            # 1. Vẽ biểu đồc
-                            st.write("📈 **Biểu đồ xu hướng:**")
-                            st.line_chart(series)
-                            
-                            # 2. Tạo bảng Excel để check giá trị
-                            st.write("📂 **Bảng đối hiếu giá trị (Excel Style):**")
-                            # Chuyển Series thành DataFrame để hiển thị đẹp hơn
+                            # 1. Chuẩn bị dữ liệu vẽ
                             check_df = series.reset_index()
-                            check_df.columns = ['Mốc Thời Gian', f'Giá Trị {col.upper()}']
+                            check_df.columns = ['Thời gian', 'Giá trị']
+                            
+                            st.write("📈 **Biểu đồ xu hướng (Plotly):**")
+                            
+                            # 2. VẼ BẰNG PLOTLY ĐỂ ÉP HIỂN THỊ CHÍNH XÁC GIỜ PHÚT GIÂY
+                            fig = px.line(check_df, x='Thời gian', y='Giá trị', markers=True)
+                            
+                            # Ép định dạng Tooltip (Hiện đầy đủ Ngày Tháng Năm Giờ Phút Giây)
+                            fig.update_traces(
+                                hovertemplate="<b>Thời gian:</b> %{x|%Y-%m-%d %H:%M:%S}<br><b>Giá trị:</b> %{y}<extra></extra>"
+                            )
+                            
+                            # Tùy chỉnh Layout: Khóa trục nếu người dùng tích vào checkbox
+                            fig.update_layout(
+                                xaxis=dict(fixedrange=lock_chart), # Khóa zoom/trượt trục X
+                                yaxis=dict(fixedrange=lock_chart), # Khóa zoom/trượt trục Y
+                                hovermode="x unified", # Gióng một đường thẳng xuống trục X khi di chuột (Cực kỳ dễ nhìn)
+                                xaxis_title="Mốc Thời Gian",
+                                yaxis_title="Giá Trị"
+                            )
+                            
+                            # Hiển thị biểu đồ Plotly
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            # 3. Tạo bảng Excel đối chiếu
+                            st.write("📂 **Bảng đối chiếu giá trị (Excel Style):**")
                             st.dataframe(check_df, use_container_width=True)
                             
-                            st.success(f"Đã hiển thị {len(check_df)} điểm dữ liệu để đối chiếu.")
+                            st.success(f"Đã hiển thị {len(check_df)} điểm dữ liệu.")
                         else:
                             st.warning(f"Cột {col} không có dữ liệu số sau khi lọc.")
                     else:
