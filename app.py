@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import json
-import re
 
 st.set_page_config(page_title="JSON Data Pro", layout="wide")
 st.title("📊 Công cụ Phân tích Dữ liệu JSON")
@@ -30,18 +29,6 @@ def flatten_json(y):
     flatten(y)
     return out
 
-# 3. Trích xuất số từ chuỗi phức tạp
-def extract_complex_numbers(val):
-    if pd.isna(val) or val == "":
-        return None
-    val_str = str(val).strip()
-    if '/' in val_str:
-        matches = re.findall(r'/([0-9.]+)', val_str)
-        if matches:
-            numbers = [float(m) for m in matches]
-            return sum(numbers) / len(numbers)
-    return val
-
 uploaded_file = st.file_uploader("Tải lên file JSON của bạn", type=['json'])
 
 if uploaded_file is not None:
@@ -49,20 +36,15 @@ if uploaded_file is not None:
         raw_data = json.load(uploaded_file)
         if isinstance(raw_data, dict): raw_data = [raw_data]
         
-        # Bước 1: Đồng nhất và làm phẳng
         clean_json = normalize_keys(raw_data)
         df = pd.DataFrame([flatten_json(row) for row in clean_json])
         
-        # Bước 2: DỌN DẸP BẢNG SẠCH SẼ
+        # Dọn dẹp bảng
         df = df.dropna(axis=1, how='all').loc[:, ~df.columns.duplicated()]
-        
-        # Biến toàn bộ chuỗi rỗng thành giá trị trống thực sự (NaN)
         df = df.replace(r'^\s*$', np.nan, regex=True)
-        
-        # Không dùng "N/A" nữa, thay bằng ô trống "" cho giống Excel
         display_df = df.fillna("")
 
-        # HIỂN THỊ BẢNG GỐC TRẮNG TINH
+        # HIỂN THỊ BẢNG GỐC
         st.subheader("📋 Bảng dữ liệu gốc")
         st.data_editor(display_df, use_container_width=True)
         
@@ -96,7 +78,6 @@ if uploaded_file is not None:
             cols_ui = st.columns(4)
             selected_keys = [k for i, k in enumerate(numeric_options) if cols_ui[i % 4].checkbox(k.upper(), key=f"c_{k}")]
 
-        # TÙY CHỌN MỚI: Lọc bỏ số 0 cho biểu đồ
         ignore_zero = st.checkbox("🚫 Bỏ qua các giá trị 0 trên biểu đồ (coi như thiết bị lỗi / mất kết nối)", value=True)
 
         # NÚT TẠO BIỂU ĐỒ
@@ -115,17 +96,49 @@ if uploaded_file is not None:
                 for col in selected_keys:
                     st.write(f"**Biểu đồ: {col.upper()}**")
                     
-                    clean_data = plot_df[col].apply(extract_complex_numbers)
-                    chart_series = pd.to_numeric(clean_data, errors='coerce')
+                    # KIỂM TRA: Cột này là số thường hay chuỗi phức tạp chứa "/"?
+                    is_complex = plot_df[col].astype(str).str.contains('/').any()
                     
-                    # NẾU TÍCH VÀO NÚT "LỌC 0", BIẾN SỐ 0 THÀNH RỖNG ĐỂ KHÔNG VẼ
+                    if is_complex:
+                        # Bóc tách từng mốc thời gian chi tiết
+                        detailed_data = []
+                        for main_time, row in plot_df.iterrows():
+                            val = str(row[col]).strip()
+                            if val and val.lower() != "nan":
+                                # Tách các cụm "20-10-28/6.9"
+                                pairs = val.split()
+                                for p in pairs:
+                                    if '/' in p:
+                                        try:
+                                            # Tách thời gian và giá trị
+                                            t_str, v_str = p.split('/', 1)
+                                            # Lấy "Ngày" từ main_time ghép với "Giờ:Phút:Giây" từ chuỗi
+                                            date_part = main_time.strftime('%Y-%m-%d')
+                                            exact_time_str = f"{date_part} {t_str.replace('-', ':')}"
+                                            
+                                            exact_time = pd.to_datetime(exact_time_str)
+                                            detailed_data.append({'Time': exact_time, 'Value': float(v_str)})
+                                        except:
+                                            pass
+                        
+                        if detailed_data:
+                            # Tạo DataFrame mới từ các điểm chi tiết này
+                            chart_df = pd.DataFrame(detailed_data).set_index('Time')
+                            chart_df = chart_df.sort_index() # Sắp xếp thời gian theo thứ tự chuẩn
+                            chart_series = chart_df['Value']
+                        else:
+                            chart_series = pd.Series(dtype=float)
+                    else:
+                        # Nếu là số bình thường (như Lưu lượng m2/h)
+                        chart_series = pd.to_numeric(plot_df[col], errors='coerce')
+                    
+                    # Lọc N/A và số 0
                     if ignore_zero:
                         chart_series = chart_series.replace(0, np.nan)
-                    
                     chart_series = chart_series.dropna()
                     
                     if chart_series.empty:
-                        st.info(f"Cột {col} trống hoặc chỉ toàn số 0, không có dữ liệu để vẽ.")
+                        st.info(f"Cột {col} trống hoặc không có dữ liệu hợp lệ để vẽ.")
                     else:
                         st.line_chart(chart_series)
                     st.write("---")
