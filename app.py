@@ -38,6 +38,7 @@ if uploaded_file is not None:
         clean_json = normalize_keys(raw_data)
         df = pd.DataFrame([flatten_json(row) for row in clean_json])
         
+        # Làm sạch bảng
         df = df.dropna(axis=1, how='all').loc[:, ~df.columns.duplicated()]
         df = df.replace(r'^\s*$', np.nan, regex=True)
         display_df = df.fillna("")
@@ -48,6 +49,8 @@ if uploaded_file is not None:
         st.divider()
 
         st.subheader("⚙️ Thiết lập biểu đồ tổng hợp")
+        
+        start_d, end_d = None, None
         
         time_col = next((col for col in df.columns if 'time' in col.lower() or 'thời gian' in col.lower()), None)
         
@@ -63,13 +66,11 @@ if uploaded_file is not None:
                     start_d, end_d = (sel_date[0], sel_date[1]) if len(sel_date) == 2 else (sel_date[0], sel_date[0])
                 else:
                     st.warning("Không tìm thấy ngày hợp lệ")
-                    start_d, end_d = None, None
             else:
                 st.info("Không có cột thời gian")
-                start_d, end_d = None, None
                 
             resample_choice = st.selectbox(
-                "Độ chi tiết của biểu đồ (Làm mượt nếu nét vẽ quá dày):",
+                "Độ chi tiết của biểu đồ (Làm mượt nếu nét vẽ bị rối):",
                 ["Từng giây (Nguyên bản)", "Trung bình mỗi phút (Khuyên dùng)", "Trung bình mỗi 5 phút", "Trung bình mỗi 10 phút"]
             )
             resample_dict = {
@@ -82,10 +83,9 @@ if uploaded_file is not None:
         with col2:
             exclude = [time_col, 'stt', 'tên khu', 'trạng thái', 'phương thức hoạt động', 'người điều khiển']
             numeric_options = [c for c in df.columns if c not in exclude and '_id' not in c]
+            st.write("Chọn các chỉ số (tích vào ô):")
             cols_ui = st.columns(4)
             selected_keys = [k for i, k in enumerate(numeric_options) if cols_ui[i % 4].checkbox(k.upper(), key=f"c_{k}")]
-            
-            show_debug = st.checkbox("🐛 Hiển thị bảng chi tiết các điểm đã lọc", value=False)
 
         if st.button("🚀 TẠO BIỂU ĐỒ", type="primary"):
             if not selected_keys:
@@ -107,6 +107,7 @@ if uploaded_file is not None:
                         val = str(row[col]).strip()
                         
                         if val and val.lower() != 'nan':
+                            # Nhận diện dữ liệu phức tạp (như PH, EC)
                             matches = re.findall(r'(\d{2}-\d{2}-\d{2})/([-+]?\d*\.?\d+)', val)
                             
                             if matches:
@@ -117,6 +118,7 @@ if uploaded_file is not None:
                                         all_points.append({'Thời gian': full_t, 'Giá trị': float(v_str)})
                                     except: pass
                             else:
+                                # Nhận diện dữ liệu số đơn giản
                                 num_match = re.search(r'[-+]?\d*\.?\d+', val)
                                 if num_match:
                                     try:
@@ -125,21 +127,19 @@ if uploaded_file is not None:
 
                     if all_points:
                         chart_df = pd.DataFrame(all_points)
+                        # Gom các điểm cùng thời gian để chống giật lùi biểu đồ
                         series = chart_df.groupby('Thời gian')['Giá trị'].mean().sort_index()
                         
-                        if ignore_zero:
-                            series = series.replace(0, np.nan)
+                        # Chỉ xóa ô bị lỗi hoặc trống, GIỮ LẠI SỐ 0
                         series = series.dropna()
                         
+                        # Xử lý làm mượt biểu đồ
                         rule = resample_dict[resample_choice]
                         if rule and not series.empty:
                             series = series.resample(rule).mean().dropna()
 
                         if not series.empty:
                             st.line_chart(series)
-                            if show_debug:
-                                with st.expander("🔍 Xem dữ liệu"):
-                                    st.dataframe(series)
                         else:
                             st.warning(f"Cột {col} không có dữ liệu hợp lệ để vẽ sau khi lọc.")
                     else:
