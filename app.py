@@ -3,22 +3,10 @@ import pandas as pd
 import numpy as np
 import json
 import re
-
-# Tự động kiểm tra xem máy tính đã cài Plotly chưa
-try:
-    import plotly.express as px
-    HAS_PLOTLY = True
-except ImportError:
-    HAS_PLOTLY = False
+import plotly.express as px
 
 st.set_page_config(page_title="JSON Data Pro", layout="wide")
-st.title("📊 Công cụ Phân tích")
-
-# Nếu chưa cài Plotly, hiện cảnh báo đỏ chót và dừng phần mềm
-if not HAS_PLOTLY:
-    st.error("🚨 MÁY BẠN CHƯA CÀI THƯ VIỆN VẼ BIỂU ĐỒ!")
-    st.warning("Hãy mở Terminal (hoặc Command Prompt) và chạy lệnh sau để cài đặt:\n\n`pip install plotly`")
-    st.stop()
+st.title("📊 Công cụ Phân tích ")
 
 def normalize_keys(data):
     if isinstance(data, list):
@@ -132,28 +120,25 @@ if uploaded_file is not None:
 
                             st.write(f"### Biểu đồ: {col.upper()}")
                             
-                            # TÍNH TOÁN "HÀNG RÀO" CHUẨN XÁC
+                            # TÍNH TOÁN "HÀNG RÀO" CHO TRỤC X
                             min_time = plot_data['TG'].min()
                             max_time = plot_data['TG'].max()
                             
+                            # Thêm 1 tí xíu đệm (buffer) 5 phút ở hai đầu để điểm đầu/cuối không bị dính sát mép màn hình
                             time_buffer = pd.Timedelta(minutes=5)
-                            
-                            # ÉP ĐỊNH DẠNG VỀ CHUỖI ĐỂ CHỐNG LỖI HIỂN THỊ
-                            str_min = (min_time - time_buffer).strftime('%Y-%m-%d %H:%M:%S')
-                            str_max = (max_time + time_buffer).strftime('%Y-%m-%d %H:%M:%S')
 
                             fig = px.line(plot_data, x='TG', y='Giá trị', markers=True)
                             
                             fig.update_traces(hovertemplate="<b>TG:</b> %{x|%Y-%m-%d %H:%M:%S}<br><b>Giá trị:</b> %{y}<extra></extra>")
                             
                             fig.update_layout(
-                                xaxis_title="Thời gian (TG)",
+                                xaxis_title="Thời gian",
                                 yaxis_title=f"Giá trị ({col.upper()})",
                                 xaxis=dict(
-                                    minallowed=str_min,
-                                    maxallowed=str_max
+                                    bounds=[min_time - time_buffer, max_time + time_buffer] # <-- CHÍNH LÀ NÓ! Dựng tường không cho kéo ra ngoài vùng dữ liệu
                                 ),
                                 yaxis=dict(
+                                    # Trục Y cũng tự động scale theo, không khóa cứng
                                     autorange=True
                                 ),
                                 hovermode="x unified"
@@ -162,11 +147,6 @@ if uploaded_file is not None:
                             
                             with st.expander(f"Xem bảng đối chiếu giá trị cho {col.upper()}"):
                                 st.dataframe(plot_data, use_container_width=True)
-                        else:
-                            st.warning(f"Cột {col} trống rỗng sau khi lọc.")
-                    else:
-                        st.warning(f"Cột {col} không có dữ liệu số để vẽ.")
                     st.write("---")
     except Exception as e:
-        # Bắt lỗi hiển thị chi tiết ra màn hình
-        st.error(f"Phát hiện lỗi kỹ thuật: {e}")
+        st.error(f"Lỗi: {e}")
