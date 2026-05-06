@@ -6,7 +6,7 @@ import re
 import plotly.express as px
 
 st.set_page_config(page_title="JSON Data Pro", layout="wide")
-st.title("📊 Công cụ Phân tích ")
+st.title("📊 Công cụ Phân tích Dữ liệu Hệ thống (Có Hàng Rào Trục)")
 
 def normalize_keys(data):
     if isinstance(data, list):
@@ -117,15 +117,22 @@ if uploaded_file is not None:
                         if not final_series.empty:
                             plot_data = final_series.reset_index()
                             plot_data.columns = ['TG', 'Giá trị']
+                            
+                            # KIỂM TRA DỮ LIỆU RỖNG TRƯỚC KHI VẼ
+                            if plot_data.empty or plot_data['TG'].isnull().all():
+                                st.warning(f"Không có dữ liệu hợp lệ để vẽ biểu đồ cho {col.upper()} trong khoảng thời gian này.")
+                                continue
 
                             st.write(f"### Biểu đồ: {col.upper()}")
                             
                             # TÍNH TOÁN "HÀNG RÀO" CHO TRỤC X
                             min_time = plot_data['TG'].min()
                             max_time = plot_data['TG'].max()
-                            
-                            # Thêm 1 tí xíu đệm (buffer) 5 phút ở hai đầu để điểm đầu/cuối không bị dính sát mép màn hình
                             time_buffer = pd.Timedelta(minutes=5)
+                            
+                            # CHUYỂN TIMESTAMP SANG STRING ĐỂ STREAMLIT/PLOTLY KHÔNG BỊ LỖI
+                            bound_min = (min_time - time_buffer).strftime('%Y-%m-%d %H:%M:%S')
+                            bound_max = (max_time + time_buffer).strftime('%Y-%m-%d %H:%M:%S')
 
                             fig = px.line(plot_data, x='TG', y='Giá trị', markers=True)
                             
@@ -135,10 +142,9 @@ if uploaded_file is not None:
                                 xaxis_title="Thời gian",
                                 yaxis_title=f"Giá trị ({col.upper()})",
                                 xaxis=dict(
-                                    bounds=[min_time - time_buffer, max_time + time_buffer] # <-- CHÍNH LÀ NÓ! Dựng tường không cho kéo ra ngoài vùng dữ liệu
+                                    bounds=[bound_min, bound_max] 
                                 ),
                                 yaxis=dict(
-                                    # Trục Y cũng tự động scale theo, không khóa cứng
                                     autorange=True
                                 ),
                                 hovermode="x unified"
@@ -147,6 +153,9 @@ if uploaded_file is not None:
                             
                             with st.expander(f"Xem bảng đối chiếu giá trị cho {col.upper()}"):
                                 st.dataframe(plot_data, use_container_width=True)
-                    st.write("---")
+                    else:
+                        st.info(f"Không trích xuất được dữ liệu số hợp lệ cho {col.upper()}.")
+                        
+                st.write("---")
     except Exception as e:
-        st.error(f"Lỗi: {e}")
+        st.error(f"Lỗi hệ thống: {e}")
