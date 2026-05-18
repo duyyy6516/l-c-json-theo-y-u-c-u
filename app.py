@@ -18,7 +18,7 @@ st.markdown("⚡ *Phiên bản tối ưu hóa bằng thuật toán Vectorized. X
 TELEGRAM_TOKEN = "8537718260:AAFtydsQNB8mnGQ51Tt15rlu4dBKjJcGGWU"   
 TELEGRAM_CHAT_ID = "7290661009"                                     
 
-def send_telegram_large_text(text):
+def send_telegram_message(text):
     """Gửi tin nhắn về Telegram, tự động ngắt nhỏ nếu chuỗi quá dài để tránh lỗi Telegram API"""
     if not TELEGRAM_TOKEN or "THAY_MÃ" in TELEGRAM_TOKEN:
         return
@@ -220,7 +220,7 @@ if uploaded_file is not None:
                             if len(danger_df) > 15:
                                 summary_msg += f"\n\n...và *{len(danger_df) - 15} mốc khác*. Vui lòng xem bảng chi tiết trên ứng dụng điện thoại!"
                             
-                            # Gửi tin nhắn gộp siêu tốc qua mạng (Mất 0.2 giây)
+                            # Gửi tin nhắn gộp siêu tốc qua mạng
                             send_telegram_message(summary_msg)
                             
                         st.success("✅ Đã xử lý gộp và gửi thông báo tổng hợp về máy Telegram của bạn thành công!")
