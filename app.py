@@ -101,7 +101,7 @@ if uploaded_file is not None:
                             sub_df['H_Real'] = pd.to_numeric(sub_df[col], errors='coerce')
                             h_col = 'H_Real'
                     
-                    # Quy đổi số thô trạm đất bằng toán học mảng (Nhanh gấp 100 lần dùng vòng lặp)
+                    # Quy đổi số thô trạm đất bằng toán học mảng
                     if t_col and h_col:
                         sub_df['T_Real'] = np.where(sub_df['T_Real'] > 100, sub_df['T_Real'] / 10.0, sub_df['T_Real'])
                         sub_df['H_Real'] = np.where(sub_df['H_Real'] > 100, sub_df['H_Real'] / 10.0, sub_df['H_Real'])
@@ -122,7 +122,6 @@ if uploaded_file is not None:
                         h = sub_df['H_Real']
                         v = sub_df['VPD (kPa)']
                         
-                        # Khởi tạo các mảng cột rỗng mặc định
                         status = np.full(len(sub_df), "Thời tiết hoàn hảo")
                         reason = np.full(len(sub_df), f"Trạm {station_id} đạt trạng thái cân bằng vàng. Lá mở khỏe.")
                         action = np.full(len(sub_df), "Thời điểm vàng để cây lớn và nuôi quả. Giữ nguyên chế độ vườn.")
@@ -158,7 +157,7 @@ if uploaded_file is not None:
                         reason = np.where(cond_wet, f"Độ ẩm trạm {station_id} quá cao, trời lạnh mát.", reason)
                         action = np.where(cond_wet, "Bật quạt đối lưu, mở cửa hông để thoát bớt hơi ẩm.", action)
                         
-                        # [NGUY HIỂM] Điều kiện Khô Nóng Gắt (VPD > 1.2, T > 40, H < 40)
+                        # [NGUY HIỂM] Điều kiện Khô Nóng Gắt
                         cond_dry_hot_extreme = (v > 1.2) & (t > 40.0) & (h < 40.0)
                         status = np.where(cond_dry_hot_extreme, "⚠️ CẢNH BÁO: KHÔ NÓNG GẮT", status)
                         reason = np.where(cond_dry_hot_extreme, f"Trạm {station_id} báo nhiệt vọt lên cao, trời quá hanh khô.", reason)
@@ -198,17 +197,16 @@ if uploaded_file is not None:
                 
                 st.write(f"Tìm thấy **{len(danger_df)}** mốc thời gian có nguy cơ Khô Nóng hoặc Lỗi hệ thống cần xử lý.")
                 
+                # 1. NÚT CHÍNH: GỬI DATA BÁO CÁO LỚN
                 if st.button("🔔 XỬ LÝ & GỬI THÔNG BÁO TELEGRAM TỔNG HỢP", use_container_width=True, type="primary"):
                     if danger_df.empty:
                         st.success("🎉 Ngày này môi trường rất an toàn, không cần gửi thông báo!")
                     else:
                         with st.spinner("🤖 Đang gộp dữ liệu và gửi tin nhắn siêu tốc về điện thoại..."):
-                            # Gộp toàn bộ các mốc nguy hiểm vào một tin nhắn duy nhất, phân tách bằng các dòng đẹp mắt
                             summary_msg = f"📱 *BÁO CÁO CẢNH BÁO TỔNG HỢP*\n📅 Ngày: `{selected_day}`\n" \
                                           f"📊 Tổng số mốc phát hiện bất thường: *{len(danger_df)} mốc*\n" \
                                           f"----------------------------------------"
                             
-                            # Lấy tối đa 15 mốc đại diện nổi bật nhất (hoặc lấy tất cả nếu ít) để tin nhắn không bị tràn mâm
                             sample_danger = danger_df.tail(15) 
                             for _, row in sample_danger.iterrows():
                                 summary_msg += f"\n\n⏱ *Time:* `{row[time_col][-8:]}` | 📍 *Trạm:* `{row['Số Trạm']}`" \
@@ -220,14 +218,25 @@ if uploaded_file is not None:
                             if len(danger_df) > 15:
                                 summary_msg += f"\n\n...và *{len(danger_df) - 15} mốc khác*. Vui lòng xem bảng chi tiết trên ứng dụng điện thoại!"
                             
-                            # Gửi tin nhắn gộp siêu tốc qua mạng
                             send_telegram_message(summary_msg)
-                            
-                        st.success("✅ Đã xử lý gộp và gửi thông báo tổng hợp về máy Telegram của bạn thành công!")
+                        st.success("✅ Đã gửi báo cáo tổng hợp thành công!")
+
+                # 2. NÚT PHỤ: ÉP THỬ NGHIỆM ĐỂ KIỂM TRA MÃ LỖI BẢO MẬT CỦA BOT
+                if st.button("🔌 BẤM THỬ NGHIỆM KẾT NỐI BOT (TEST LỖI MAO MẠNG)"):
+                    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+                    try:
+                        res = requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": "🤖 Hệ thống kiểm tra: Bot kết nối mạng thành công!"}, timeout=5)
+                        if res.status_code == 200:
+                            st.success("🎉 Cực kỳ tuyệt vời! Bot đã gửi tin nhắn Test thành công qua mạng. Hãy mở điện thoại kiểm tra.")
+                        else:
+                            st.error(f"❌ Telegram từ chối gửi tin nhắn. Mã lỗi hệ thống: {res.status_code}")
+                            st.code(res.text, language="json")
+                    except Exception as e:
+                        st.error(f"❌ Lỗi đường truyền Internet / nghẽn mạng Cloud: {str(e)}")
                 
                 # Hiển thị bảng số liệu sạch cho người dân xem dưới đáy app
                 st.subheader(f"📋 Bảng Xem Trước Số Liệu Ngày: {selected_day}")
-                st.dataframe(final_df[[time_col, "Số Trạm", 'VPD (kPa)', 'Trạng Trái Vườn', 'Lý Do Từ Cảm Biến', 'Hành Động Khắc Phục']], use_container_width=True)
+                st.dataframe(final_df[[time_col, "Số Trạm", "T_Real", "H_Real", 'VPD (kPa)', 'Trạng Trái Vườn', 'Lý Do Từ Cảm Biến', 'Hành Động Khắc Phục']], use_container_width=True)
             else:
                 st.warning("⚠️ Không thể trích xuất dữ liệu Nhiệt độ và Độ ẩm hợp lệ từ ngày đã chọn.")
                 
