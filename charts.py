@@ -15,18 +15,27 @@ def draw_humidity_chart(df):
     ).properties(height=200).interactive()
 
 def draw_vpd_chart(df, vpd_min, vpd_max):
-    # Giải pháp phủ màu tràn viền vô cực: Ép dải màu luôn bám sát mép trên và dưới của đồ thị
+    # ĐỊNH VỊ KHUNG TRỤC Y TỐI ƯU GIAO DIỆN (Từ 0.0 đến 2.2 kPa)
+    Y_LIMIT = 2.2
+    
+    # Khối màu xanh (Quá ẩm) phủ từ đáy lên đến mức tối thiểu
     rect_blue = alt.Chart(df).mark_rect(color='#0068C9', opacity=0.12).encode(
-        y=alt.Y(datum=-5.0),
+        y=alt.Y(datum=0.0),
         y2=alt.Y2(datum=vpd_min)
     )
+    
+    # Khối màu đỏ (Quá khô) phủ từ mức tối đa lên đến đỉnh khung hình (2.2)
     rect_red = alt.Chart(df).mark_rect(color='#FF4B4B', opacity=0.12).encode(
         y=alt.Y(datum=vpd_max),
-        y2=alt.Y2(datum=10.0)
+        y2=alt.Y2(datum=Y_LIMIT)
     )
+    
+    # Đường đồ thị chính: Khóa cứng trục Y từ 0 đến 2.2 để đường nét căng, dễ quan sát
     line_vpd = alt.Chart(df).mark_line(color="#2E7D32", point=True).encode(
         x=alt.X('Hiển thị Giờ:O', axis=alt.Axis(title="Mốc thời gian", labelAngle=-45)),
-        y=alt.Y('VPD (kPa):Q', scale=alt.Scale(zero=False), axis=alt.Axis(title="Chỉ số VPD (kPa)", grid=True)),
+        y=alt.Y('VPD (kPa):Q', 
+               scale=alt.Scale(domain=[0.0, Y_LIMIT]), 
+               axis=alt.Axis(title="Chỉ số VPD (kPa)", grid=True)),
         tooltip=['Ngày', 'Hiển thị Giờ', 'VPD (kPa)', 'Trạng thái']
     ).interactive() 
     
