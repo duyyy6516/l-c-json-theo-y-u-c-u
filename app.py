@@ -89,7 +89,7 @@ def trigger_new_data(vpd_min, vpd_max):
 tab_future, tab_past = st.tabs(["🔮 XEM DỰ BÁO & THEO DÕI TƯƠNG LAI", "📁 TẢI FILE & PHÂN TÍCH LỊCH SỬ"])
 
 # =========================================================================
-# TAB 1: MÔ PHỎNG REALTIME TRONG TƯƠNG LAI
+# TAB 1: GIỮ NGUYÊN HOÀN TOÀN LOGIC REALTIME (KHÔNG THAY ĐỔI)
 # =========================================================================
 with tab_future:
     left_col, right_col = st.columns([3.5, 6.5])
@@ -199,7 +199,7 @@ with tab_future:
 
 
 # =========================================================================
-# 📁 TAB 2: TỰ ĐỘNG PHÂN TÍCH FILE IOT (CẤU HÌNH NGHIÊM NGẶT tempKK & humiKK)
+# 📁 TAB 2: CHỈ SỬA ĐỔI NƠI NÀY - TỰ ĐỘNG CHUẨN HÓA SỐ ĐO THÔ CẢM BIẾN TRONG FILE
 # =========================================================================
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 18px;'>📁 TỰ ĐỘNG PHÂN TÍCH FILE IOT (JSON / CSV / XLSX)</h3>", unsafe_allow_html=True)
@@ -228,15 +228,25 @@ with tab_past:
                 
             col_temp, col_rh, col_time = None, None, None
             
-            # ✨ THIẾT LẬP CỨNG CHỈ QUÉT ĐÚNG TÊN CỘT ĐỊNH DANH tempKK VÀ humiKK
+            # Quét nhãn thông minh (giữ nguyên tính năng quét rộng linh hoạt của bạn)
             for col in df_upload.columns:
                 col_lower = str(col).lower().strip()
-                if col_lower == 'tempkk': col_temp = col
-                if col_lower == 'humikk': col_rh = col
+                if 'tempkk' in col_lower: col_temp = col
+                if 'humikk' in col_lower: col_rh = col
                 if any(k in col_lower for k in ['thời gian', 'time', 'gio', 'date', 'timestamp', 'mốc', 'created_at']):
                     col_time = col
 
-            # Nếu file Excel/CSV thông thường không tìm thấy nhãn chuẩn tempKK, ta mới lấy cột đầu để dự phòng
+            if not col_temp:
+                for col in df_upload.columns:
+                    col_lower = str(col).lower().strip()
+                    if any(k in col_lower for k in ['temp', 'nhiet', 't°', 't(°c)', 'temperature']):
+                        col_temp = col
+            if not col_rh:
+                for col in df_upload.columns:
+                    col_lower = str(col).lower().strip()
+                    if any(k in col_lower for k in ['rh', 'hum', 'do am', 'humidity', 'h(%)']):
+                        col_rh = col
+
             if not col_temp and len(df_upload.columns) > 0: col_temp = df_upload.columns[0]
             if not col_rh and len(df_upload.columns) > 1: col_rh = df_upload.columns[1]
             if not col_time and len(df_upload.columns) > 2: col_time = df_upload.columns[2]
@@ -257,10 +267,19 @@ with tab_past:
 
             df_raw_calc = pd.DataFrame()
             df_raw_calc["datetime_internal"] = raw_datetimes
-            df_raw_calc["Nhiệt độ (°C)"] = pd.to_numeric(df_upload[col_temp], errors='coerce')
-            df_raw_calc["Độ ẩm (%)"] = pd.to_numeric(df_upload[col_rh], errors='coerce')
             
-            # Chỉ lấy các dòng dữ liệu không bị trống (Những phần dữ liệu tháng 4 không có cột tempKK/humiKK sẽ bị loại bỏ hoàn toàn tự động ở đây)
+            # Ép kiểu dữ liệu gốc dạng số từ File
+            raw_t_nums = pd.to_numeric(df_upload[col_temp], errors='coerce')
+            raw_h_nums = pd.to_numeric(df_upload[col_rh], errors='coerce')
+            
+            # ✨ THUẬT TOÁN ĐỔI ĐƠN VỊ CẢM BIẾN:
+            # Nếu số thô Nhiệt độ > 75.0 (Ví dụ: 331) -> Chia 10 để về 33.1°C thực tế
+            # Nếu số thô Độ ẩm > 100.0 (Ví dụ: 4520 hoặc 850) -> Chia 100 để về % thực tế
+            df_raw_calc["Nhiệt độ (°C)"] = raw_t_nums.apply(lambda x: x / 10.0 if pd.notna(x) and x > 75.0 else x)
+            df_raw_calc["Độ ẩm (%)"] = raw_h_nums.apply(lambda x: x / 100.0 if pd.notna(x) and x > 100.0 else x)
+            
+            # Lọc bỏ các dòng dữ liệu rác (Độ ẩm không hợp lệ dưới hoặc bằng 1%)
+            df_raw_calc = df_raw_calc[df_raw_calc["Độ ẩm (%)"] > 1.0]
             df_raw_calc = df_raw_calc.dropna(subset=["Nhiệt độ (°C)", "Độ ẩm (%)"]).sort_values("datetime_internal")
 
             # Xử lý cắt mốc thời gian và gán lịch chọn ngày tùy chọn
@@ -314,6 +333,8 @@ with tab_past:
             df_processed["Nhiệt độ (°C)"] = df_resampled["Nhiệt độ (°C)"].round(2)
             df_processed["Độ ẩm (%)"] = df_resampled["Độ ẩm (%)"].round(2)
             df_processed["Hiển thị Giờ"] = df_resampled["Hiển thị Giờ"]
+            
+            # Áp dụng công thức tính toán VPD đồng bộ sang Tab Realtime (nhận vào nhiệt độ và độ ẩm chuẩn đã chia)
             df_processed["VPD (kPa)"] = df_processed.apply(lambda row: round(calculate_vpd(row["Nhiệt độ (°C)"], row["Độ ẩm (%)"]), 2), axis=1)
             df_processed["Ngày"] = "Dữ liệu File"
             df_processed["Trạng thái"] = df_processed["VPD (kPa)"].apply(lambda x: "⚠️ Quá ẩm" if x < vpd_min else ("✅ Lý tưởng" if x <= vpd_max else "🚨 Quá khô"))
