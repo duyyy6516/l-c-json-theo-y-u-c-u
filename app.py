@@ -86,7 +86,6 @@ def trigger_new_data(vpd_min, vpd_max):
         st.session_state.is_completed = True   
     st.session_state.simulated_time = next_sim_datetime.strftime("%Y-%m-%d %H:%M:%S")
 
-# Khởi tạo 2 Tab giao diện chính
 tab_future, tab_past = st.tabs(["🔮 XEM DỰ BÁO & THEO DÕI TƯƠNG LAI", "📁 TẢI FILE & PHÂN TÍCH LỊCH SỬ"])
 
 # =========================================================================
@@ -200,11 +199,19 @@ with tab_future:
 
 
 # =========================================================================
-# 📁 TAB 2: TỰ ĐỘNG PHÂN TÍCH FILE IOT (XỬ LÝ ĐỊNH DẠNG THỜI GIAN THÔNG MINH)
+# 📁 TAB 2: TỰ ĐỘNG PHÂN TÍCH FILE IOT (NÂNG CẤP XỬ LÝ TRUNG BÌNH THÔNG MINH)
 # =========================================================================
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 18px;'>📁 TỰ ĐỘNG PHÂN TÍCH FILE IOT (JSON / CSV / XLSX)</h3>", unsafe_allow_html=True)
-    uploaded_file = st.file_uploader("Kéo thả file IoT nhà kính của bạn vào đây:", type=["json", "csv", "xlsx"])
+    
+    upload_col1, upload_col2 = st.columns([6, 4])
+    with upload_col1:
+        uploaded_file = st.file_uploader("Kéo thả file IoT nhà kính của bạn vào đây:", type=["json", "csv", "xlsx"])
+    with upload_col2:
+        time_filter_option = st.selectbox(
+            "📆 Chọn khoảng thời gian phân tích tùy ý:",
+            ["⏱️ 1 Ngày gần nhất (Hiện tất cả thô)", "📅 1 Tuần gần nhất (Tính trung bình Giờ)", "🗓️ 1 Tháng gần nhất (Tính trung bình Giờ)", "🏢 1 Quý gần nhất (Tính trung bình Ngày)", "📊 Xem toàn bộ dữ liệu file"]
+        )
     
     if uploaded_file:
         try:
@@ -233,28 +240,68 @@ with tab_past:
             if not col_rh and len(df_upload.columns) > 1: col_rh = df_upload.columns[1]
             if not col_time and len(df_upload.columns) > 2: col_time = df_upload.columns[2]
 
-            df_processed = pd.DataFrame()
-            df_processed["Nhiệt độ (°C)"] = pd.to_numeric(df_upload[col_temp], errors='coerce')
-            df_processed["Độ ẩm (%)"] = pd.to_numeric(df_upload[col_rh], errors='coerce')
-            
-            # ✨ THUẬT TOÁN MỚI: Tự động trích xuất chuỗi thời gian (Hỗ trợ định dạng có cả dấu gạch ngang và khoảng cách)
-            times_list = []
+            raw_datetimes = []
             for val in df_upload[col_time].astype(str):
                 cleaned_val = val.strip()
-                extracted_time = cleaned_val
-                # Nếu định dạng là chuỗi ngày giờ đầy đủ (Ví dụ: "2025-02-18 16-43-37")
-                if " " in cleaned_val:
-                    time_part = cleaned_val.split(" ")[1] # Lấy cụm phía sau: "16-43-37"
-                    # Chuẩn hóa dấu gạch ngang hoặc dấu hai chấm thành cấu trúc H:M chuẩn
-                    time_part = time_part.replace("-", ":")
-                    parts = time_part.split(":")
-                    if len(parts) >= 2:
-                        extracted_time = f"{parts[0]}:{parts[1]}" # Trích lấy "16:43"
-                times_list.append(extracted_time)
+                try:
+                    if " " in cleaned_val and "-" in cleaned_val.split(" ")[1]:
+                        date_p, time_p = cleaned_val.split(" ")
+                        time_p = time_p.replace("-", ":")
+                        dt_obj = datetime.strptime(f"{date_p} {time_p}", "%Y-%m-%d %H:%M:%S")
+                    else:
+                        dt_obj = pd.to_datetime(cleaned_val)
+                    raw_datetimes.append(dt_obj)
+                except:
+                    raw_datetimes.append(datetime.now())
+
+            df_raw_calc = pd.DataFrame()
+            df_raw_calc["datetime_internal"] = raw_datetimes
+            df_raw_calc["Nhiệt độ (°C)"] = pd.to_numeric(df_upload[col_temp], errors='coerce')
+            df_raw_calc["Độ ẩm (%)"] = pd.to_numeric(df_upload[col_rh], errors='coerce')
+            df_raw_calc = df_raw_calc.dropna(subset=["Nhiệt độ (°C)", "Độ ẩm (%)"]).sort_values("datetime_internal")
+
+            # Tiến hành cắt khoảng thời gian theo bộ lọc người dùng chọn
+            if len(df_raw_calc) > 0:
+                max_time_in_file = df_raw_calc["datetime_internal"].max()
                 
-            df_processed["Hiển thị Giờ"] = times_list
+                if "1 Ngày gần nhất" in time_filter_option:
+                    start_filter_time = max_time_in_file - timedelta(days=1)
+                    df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= start_filter_time]
+                elif "1 Tuần gần nhất" in time_filter_option:
+                    start_filter_time = max_time_in_file - timedelta(days=7)
+                    df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= start_filter_time]
+                elif "1 Tháng gần nhất" in time_filter_option:
+                    start_filter_time = max_time_in_file - timedelta(days=30)
+                    df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= start_filter_time]
+                elif "1 Quý gần nhất" in time_filter_option:
+                    start_filter_time = max_time_in_file - timedelta(days=90)
+                    df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= start_filter_time]
+
+            # 🛠️ QUY TẮC PHÂN LOẠI MỚI: 1 ngày hiện tất cả thô, trên 1 ngày gom nhóm tính trung bình
+            if len(df_raw_calc) > 0:
+                df_raw_calc.set_index("datetime_internal", inplace=True)
                 
-            df_processed = df_processed.dropna(subset=["Nhiệt độ (°C)", "Độ ẩm (%)"])
+                if "1 Tuần gần nhất" in time_filter_option or "1 Tháng gần nhất" in time_filter_option:
+                    # LỚN HƠN 1 NGÀY: Gom nhóm tính TRUNG BÌNH cộng theo từng GIỜ
+                    df_resampled = df_raw_calc.resample("1h").mean().dropna()
+                    df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%d/%m %H:00")
+                elif "1 Quý gần nhất" in time_filter_option:
+                    # LỚN HƠN 1 NGÀY: Gom nhóm tính TRUNG BÌNH cộng theo từng NGÀY
+                    df_resampled = df_raw_calc.resample("1d").mean().dropna()
+                    df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%d/%m")
+                else:
+                    # 1 NGÀY HOẶC XEM TOÀN BỘ FILE: Giữ NGUYÊN TẤT CẢ các điểm dữ liệu thô chi tiết
+                    df_resampled = df_raw_calc.copy()
+                    df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%H:%M:%S")
+                
+                df_resampled.reset_index(inplace=True)
+            else:
+                df_resampled = pd.DataFrame(columns=["Nhiệt độ (°C)", "Độ ẩm (%)", "Hiển thị Giờ"])
+
+            df_processed = pd.DataFrame()
+            df_processed["Nhiệt độ (°C)"] = df_resampled["Nhiệt độ (°C)"].round(2)
+            df_processed["Độ ẩm (%)"] = df_resampled["Độ ẩm (%)"].round(2)
+            df_processed["Hiển thị Giờ"] = df_resampled["Hiển thị Giờ"]
             df_processed["VPD (kPa)"] = df_processed.apply(lambda row: round(calculate_vpd(row["Nhiệt độ (°C)"], row["Độ ẩm (%)"]), 2), axis=1)
             df_processed["Ngày"] = "Dữ liệu File"
             df_processed["Trạng thái"] = df_processed["VPD (kPa)"].apply(lambda x: "⚠️ Quá ẩm" if x < vpd_min else ("✅ Lý tưởng" if x <= vpd_max else "🚨 Quá khô"))
@@ -263,7 +310,7 @@ with tab_past:
             
             res_left, res_right = st.columns([6.5, 3.5])
             with res_left:
-                st.markdown("##### 📈 Hệ thống Biểu đồ trích xuất từ File")
+                st.markdown(f"##### 📈 Hệ thống Biểu đồ trích xuất từ File")
                 
                 file_sub_tab1, file_sub_tab2, file_sub_tab3, file_sub_tab4 = st.tabs([
                     "🎯 Chỉ số VPD", "🌡️ Nhiệt độ", "💧 Độ ẩm", "📊 Tổ hợp 3 chỉ số"
@@ -279,18 +326,18 @@ with tab_past:
                 
             with res_right:
                 st.markdown("##### 📋 Nhật ký VPD đã xử lý")
-                st.caption(f"Tổng số mốc dữ liệu đọc được: {len(df_processed)} dòng.")
+                st.caption(f"Tổng số dòng dữ liệu hiển thị: {len(df_processed)} dòng.")
                 preview_cols = ["Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]
-                st.dataframe(df_processed[preview_cols].head(150), use_container_width=True, hide_index=True, height=210)
+                st.dataframe(df_processed[preview_cols].head(300), use_container_width=True, hide_index=True, height=210)
                 
                 st.download_button(
                     label="📥 Tải xuống kết quả tính toán (.csv)",
                     data=df_processed.to_csv(index=False).encode('utf-8'),
-                    file_name="vpd_iot_calculated.csv",
+                    file_name=f"vpd_calculated_smart.csv",
                     mime="text/csv",
                     use_container_width=True
                 )
         except Exception as err:
-            st.error(f"❌ Cấu trúc tệp không tương thích. Vui lòng kiểm tra lại mảng dữ liệu. Chi tiết lỗi: {err}")
+            st.error(f"❌ Cấu trúc tệp không tương thích hoặc lỗi xử lý khoảng ngày tùy chỉnh. Chi tiết lỗi: {err}")
     else:
-        st.info("💡 Hệ thống tự động bóc tách các trường dữ liệu thô từ file JSON, Excel, CSV để tính toán trực tiếp giá trị VPD và đồng bộ hóa biểu đồ.")
+        st.info("💡 Hệ thống tự động bóc tách dữ liệu: Hiện đầy đủ chi tiết với chu kỳ 1 Ngày, tự động tính trung bình theo Giờ/Ngày với chu kỳ Tuần, Tháng, Quý.")
