@@ -12,17 +12,36 @@ from charts import draw_temperature_chart, draw_humidity_chart, draw_vpd_chart, 
 TELE_TOKEN = "8917951413:AAE6LKUEfYEYiQrFWGoKsQn0tumZc_XbcHg"
 TELE_CHAT_ID = "7290661009"
 
-# 1. BẮT BUỘC: Đổi sang layout "wide" để tận dụng chiều ngang màn hình
+# BẮT BUỘC: Đổi sang layout "wide" để tận dụng chiều ngang màn hình
 st.set_page_config(page_title="VPD Đà Lạt Realtime", page_icon="🌿", layout="wide")
 
-# Ép CSS để thu hẹp khoảng cách viền trên cùng của Streamlit, giúp tăng diện tích hiển thị
+# =========================================================================
+# 🛠️ ĐOẠN CSS ĐÃ SỬA: TĂNG PADDING-TOP ĐỂ TIÊU ĐỀ KHÔNG BỊ CHE KHUẤT
+# =========================================================================
 st.markdown("""
     <style>
-    .block-container {padding-top: 1rem; padding-bottom: 0rem; padding-left: 2rem; padding-right: 2rem;}
-    h3 {margin-top: 0rem; margin-bottom: 0.5rem;}
-    div[st-delegate="element-container"] {margin-bottom: 0.3rem;}
+    /* Tăng padding-top lên 2.5rem để đẩy toàn bộ nội dung xuống dưới thanh bar Streamlit */
+    .block-container {
+        padding-top: 2.5rem; 
+        padding-bottom: 0rem; 
+        padding-left: 1.5rem; 
+        padding-right: 1.5rem;
+    }
+    
+    /* Tạo khoảng cách thông thoáng hợp lý cho tiêu đề hai cột */
+    h3 {
+        margin-top: 0.2rem; 
+        margin-bottom: 0.8rem; 
+        padding-top: 0.2rem;
+    }
+    
+    /* Thu hẹp nhẹ khoảng cách giữa các khối để giữ giao diện gọn gàng */
+    div[st-delegate="element-container"] {
+        margin-bottom: 0.3rem;
+    }
     </style>
     """, unsafe_allow_html=True)
+# =========================================================================
 
 # Khởi tạo trạng thái Session State
 if 'temp' not in st.session_state: st.session_state.temp = 0.0
@@ -74,7 +93,7 @@ def trigger_new_data(vpd_min, vpd_max):
             f"🌿 *HỆ THỐNG VPD ĐÀ LẠT REALTIME*\n⏰ Thời gian: {current_date_str} - {current_sim_datetime.strftime('%H:%M')}\n"
             f"📊 Môi trường: {st.session_state.temp}°C | {st.session_state.rh}%\n\n"
             f"*1️⃣ Trạng thái:* Chỉ số đạt *{new_vpd:.2f} kPa* — *{tele_status}*\n"
-            f"*2️⃣ Đề xuất:* _{sol}_\n*3️⃣ Xu hướng:* {trend}"
+            f"*2️⃣ Đề xuất:* _{sol}_\n*3️⃣ Xuương:* {trend}"
         )
         send_telegram_message(TELE_TOKEN, TELE_CHAT_ID, telegram_msg)
     
@@ -88,10 +107,10 @@ def trigger_new_data(vpd_min, vpd_max):
 left_col, right_col = st.columns([3.5, 6.5])
 
 # =========================================================
-# ⬅️ CỘT TRÁI: ĐIỀU KHIỂN & TRẠNG THÁI REALTIME (GỌN GÀNG)
+# ⬅️ CỘT TRÁI: ĐIỀU KHIỂN & TRẠNG THÁI REALTIME
 # =========================================================
 with left_col:
-    st.markdown("<h3 style='color: #2E7D32; font-size: 20px; margin-bottom: 10px;'>🌿 CẤU HÌNH & ĐIỀU HÀNH REALTIME</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #2E7D32; font-size: 20px;'>🌿 CẤU HÌNH & ĐIỀU HÀNH REALTIME</h3>", unsafe_allow_html=True)
     
     # Khối 1: Hệ thống nút bấm điều khiển
     with st.container(border=True):
@@ -107,7 +126,7 @@ with left_col:
                 st.session_state.is_running = False
                 st.rerun()
                 
-    # Khối 2: Cấu hình cây trồng (Slider thu nhỏ kích thước)
+    # Khối 2: Cấu hình cây trồng
     with st.container(border=True):
         plant_list = ["🍓 Dâu tây Đà Lạt", "🌹 Hoa hồng nhà kính", "🌼 Hoa cúc / Hoa đồng tiền", "🍅 Cà chua bi / 🫑 Ớt chuông", "🛠️ Tùy chỉnh thủ công"]
         plant_option = st.selectbox("Cây trồng:", plant_list, index=st.session_state.plant_idx, disabled=st.session_state.is_running, label_visibility="collapsed")
@@ -165,10 +184,10 @@ with left_col:
     left_panel_monitor()
 
 # =========================================================
-# ➡️ CỘT PHẢI: TRUNG TÂM PHÂN TÍCH ĐỒ THỊ & DỮ LIỆU SỐ (BÊN PHẢI)
+# ➡️ CỘT PHẢI: TRUNG TÂM PHÂN TÍCH ĐỒ THỊ & DỮ LIỆU SỐ
 # =========================================================
 with right_col:
-    st.markdown("<h3 style='color: #2E7D32; font-size: 20px; margin-bottom: 10px;'>📊 TRUNG TÂM PHÂN TÍCH CHU KỲ & LỊCH SỬ NHÀ KÍNH</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #2E7D32; font-size: 20px;'>📊 TRUNG TÂM PHÂN TÍCH CHU KỲ & LỊCH SỬ NHÀ KÍNH</h3>", unsafe_allow_html=True)
     
     if len(st.session_state.history) == 0:
         st.info("Chưa có số liệu. Vui lòng bấm '▶️ Bắt đầu' ở cột bên trái để vẽ đồ thị.")
@@ -188,10 +207,10 @@ with right_col:
         df_all_records = pd.DataFrame(st.session_state.history)
         df_filtered = df_all_records[df_all_records["Ngày"] == selected_view_day].iloc[::-1].copy()
 
-        # NÉN TOÀN BỘ CHỨC NĂNG VÀO 3 TAB LỚN ĐỂ KHÔNG CẦN CUỘN TRANG
+        # Hệ thống Tab lớn
         main_tab1, main_tab2, main_tab3 = st.tabs(["📈 Biểu đồ trực quan", "📊 Thống kê theo buổi", "📋 Bảng Nhật ký số liệu"])
         
-        # --- TAB 1: BIỂU ĐỒ (CHỨA ĐỒ THỊ ALTAIR ĐÃ ĐƯỢC HẠ CHIỀU CAO XUỐNG 230PX) ---
+        # --- TAB 1: BIỂU ĐỒ VỆ TINH ---
         with main_tab1:
             sub_t1, sub_t2, sub_t3, sub_t4 = st.tabs(["🎯 Chỉ số VPD", "🌡️ Nhiệt độ", "💧 Độ ẩm", "📊 Tổ hợp 3 chỉ số"])
             with sub_t1: st.altair_chart(draw_vpd_chart(df_filtered, vpd_min, vpd_max), use_container_width=True)
@@ -209,6 +228,5 @@ with right_col:
         with main_tab3:
             df_display = df_filtered.iloc[::-1].copy()
             df_display["Thời gian"] = df_display["Hiển thị Giờ"]
-            # Chỉ giữ các cột quan trọng nhất để vừa khung hình
             df_display = df_display[["STT", "Thời gian", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]]
             st.dataframe(df_display, use_container_width=True, hide_index=True, height=200)
