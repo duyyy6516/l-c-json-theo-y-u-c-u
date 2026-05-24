@@ -204,7 +204,6 @@ with tab_future:
             with main_tab3:
                 df_display = df_filtered.copy()
                 df_display["Thời gian"] = df_display["Hiển thị Giờ"]
-                # Bỏ thuộc tính height cố định để trang web tự động kéo giãn mềm mại không bị nghẽn cuộn chuột
                 st.dataframe(df_display[["STT", "Thời gian", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]], use_container_width=True, hide_index=True)
 
 
@@ -369,7 +368,6 @@ with tab_past:
                 st.caption(f"Tổng điểm dữ liệu sau xử lý: {len(df_processed)}")
                 preview_cols = ["Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]
                 
-                # Bỏ thuộc tính height cố định để bảng tự giãn, đưa việc cuộn cho thanh cuộn dọc ngoài xử lý
                 st.dataframe(df_processed[preview_cols].head(100), use_container_width=True, hide_index=True)
                 
                 st.download_button(
@@ -427,6 +425,42 @@ with tab_past:
                 
                 df_block_report = pd.DataFrame(block_report_rows)
                 st.dataframe(df_block_report, use_container_width=True, hide_index=True)
+                
+                # --------------------------------------------------------
+                # MỚI THÊM: NÚT GỬI BÁO CÁO FILE LÊN TELEGRAM
+                # --------------------------------------------------------
+                st.write("")
+                if st.button("📤 Gửi báo cáo phân tích file qua Telegram", type="primary", key="btn_send_file_tele"):
+                    if TELE_TOKEN and TELE_CHAT_ID:
+                        # Ghép chuỗi văn bản báo cáo từ dataframe báo cáo theo buổi
+                        file_tele_msg = f"📂 *BÁO CÁO PHÂN TÍCH TỪ FILE IoT THÀNH CÔNG*\n"
+                        file_tele_msg += f"📦 Tên file: `{uploaded_file.name}`\n"
+                        file_tele_msg += f"🎯 Mô hình áp dụng: *{file_plant_option}* ({file_vpd_min}-{file_vpd_max} kPa)\n"
+                        file_tele_msg += f"⏱️ Chế độ xem: _{time_filter_option}_\n"
+                        file_tele_msg += f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                        
+                        for _, r_data in df_block_report.iterrows():
+                            # Chuyển icon dựa trên kết quả đánh giá để Telegram sinh động dễ đọc
+                            icon_status = "🟩" if "LÝ TƯỞNG" in r_data["Đánh giá"] else ("🟦" if "Quá ẩm" in r_data["Đánh giá"] else "🟥")
+                            
+                            file_tele_msg += f"{icon_status} *{r_data['Khoảng Buổi']}*\n"
+                            file_tele_msg += f"▪️ Môi trường: {r_data['Nhiệt độ TB']} | {r_data['Độ ẩm TB']}\n"
+                            file_tele_msg += f"▪️ VPD TB: *{r_data['VPD Trung Bình']}*\n"
+                            file_tele_msg += f"▪️ Đánh giá: _{r_data['Đánh giá']}_\n"
+                            file_tele_msg += f"▪️ Giải pháp: {r_data['Biện pháp kỹ thuật đề xuất']}\n"
+                            file_tele_msg += f"────────────────────\n"
+                            
+                        file_tele_msg += f"\n📊 _Hệ thống phân tích tự động thông minh VPD Farm_"
+                        
+                        # Gọi service gửi tin nhắn
+                        success = send_telegram_message(TELE_TOKEN, TELE_CHAT_ID, file_tele_msg)
+                        if success:
+                            st.success("✅ Đã gửi toàn bộ dữ liệu báo cáo file qua Telegram thành công!")
+                        else:
+                            st.error("❌ Không thể gửi tin nhắn. Vui lòng kiểm tra lại cấu hình kết nối mạng.")
+                    else:
+                        st.warning("⚠️ Hệ thống chưa cấu hình TELE_TOKEN hoặc TELE_CHAT_ID.")
+                        
             else:
                 st.info("Chưa có đủ mốc thời gian thích hợp để phân tích chu kỳ buổi.")
 
