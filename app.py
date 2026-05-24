@@ -142,7 +142,7 @@ with tab_future:
 
             vpd_result = calculate_vpd(st.session_state.temp, st.session_state.rh)
             with st.container(border=True):
-                st.markdown("<p style='color:#2E7D32; font-weight:bold; margin-bottom:2px;'>🎯 TRUNG TÂM ĐIỀU HÀNH LỆNH</p>", unsafe_allow_html=True)
+                st.markdown("<p style='color:#2E7D32; font-weight:bold; margin-bottom:2px;'>🎯 TRUNG TÂM ĐIỀU HÀNH LỆỂNH</p>", unsafe_allow_html=True)
                 if st.session_state.stt_counter == 0:
                     st.info("Đang chờ kích hoạt trạm...")
                 else:
@@ -199,7 +199,7 @@ with tab_future:
 
 
 # =========================================================================
-# 📁 TAB 2: CHỈ SỬA ĐỔI NƠI NÀY - TỰ ĐỘNG CHUẨN HÓA SỐ ĐO THÔ CẢM BIẾN TRONG FILE
+# 📁 TAB 2: CẬP NHẬT THUẬT TOÁN GOM TRUNG BÌNH 1 ĐIỂM / 1 NGÀY CHO TUẦN/THÁNG/QUÝ
 # =========================================================================
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 18px;'>📁 TỰ ĐỘNG PHÂN TÍCH FILE IOT (JSON / CSV / XLSX)</h3>", unsafe_allow_html=True)
@@ -210,7 +210,7 @@ with tab_past:
     with upload_col2:
         time_filter_option = st.selectbox(
             "📆 Chọn chế độ xem / Khoảng cách thời gian:",
-            ["📆 Tự chọn một ngày cụ thể trên lịch", "⏱️ 1 Ngày gần nhất (Gom trung bình 10 phút)", "📅 1 Tuần gần nhất (Gom trung bình Giờ)", "🗓️ 1 Tháng gần nhất (Gom trung bình Giờ)", "🏢 1 Quý gần nhất (Gom trung bình Ngày)", "📊 Xem toàn bộ dữ liệu thô file"]
+            ["📆 Tự chọn một ngày cụ thể trên lịch", "⏱️ 1 Ngày gần nhất (Gom trung bình 10 phút)", "📅 1 Tuần gần nhất (Lấy chỉ số TB của 1 Ngày)", "🗓️ 1 Tháng gần nhất (Lấy chỉ số TB của 1 Ngày)", "🏢 1 Quý gần nhất (Lấy chỉ số TB của 1 Ngày)", "📊 Xem toàn bộ dữ liệu thô file"]
         )
     
     if uploaded_file:
@@ -228,7 +228,7 @@ with tab_past:
                 
             col_temp, col_rh, col_time = None, None, None
             
-            # Quét nhãn thông minh (giữ nguyên tính năng quét rộng linh hoạt của bạn)
+            # Quét nhãn thông minh nhạy bén
             for col in df_upload.columns:
                 col_lower = str(col).lower().strip()
                 if 'tempkk' in col_lower: col_temp = col
@@ -268,21 +268,17 @@ with tab_past:
             df_raw_calc = pd.DataFrame()
             df_raw_calc["datetime_internal"] = raw_datetimes
             
-            # Ép kiểu dữ liệu gốc dạng số từ File
             raw_t_nums = pd.to_numeric(df_upload[col_temp], errors='coerce')
             raw_h_nums = pd.to_numeric(df_upload[col_rh], errors='coerce')
             
-            # ✨ THUẬT TOÁN ĐỔI ĐƠN VỊ CẢM BIẾN:
-            # Nếu số thô Nhiệt độ > 75.0 (Ví dụ: 331) -> Chia 10 để về 33.1°C thực tế
-            # Nếu số thô Độ ẩm > 100.0 (Ví dụ: 4520 hoặc 850) -> Chia 100 để về % thực tế
+            # Đồng bộ thuật toán tự đổi đơn vị cảm biến thô (Nhiệt độ / 10, Độ ẩm / 100)
             df_raw_calc["Nhiệt độ (°C)"] = raw_t_nums.apply(lambda x: x / 10.0 if pd.notna(x) and x > 75.0 else x)
             df_raw_calc["Độ ẩm (%)"] = raw_h_nums.apply(lambda x: x / 100.0 if pd.notna(x) and x > 100.0 else x)
             
-            # Lọc bỏ các dòng dữ liệu rác (Độ ẩm không hợp lệ dưới hoặc bằng 1%)
             df_raw_calc = df_raw_calc[df_raw_calc["Độ ẩm (%)"] > 1.0]
             df_raw_calc = df_raw_calc.dropna(subset=["Nhiệt độ (°C)", "Độ ẩm (%)"]).sort_values("datetime_internal")
 
-            # Xử lý cắt mốc thời gian và gán lịch chọn ngày tùy chọn
+            # Cắt lát khoảng cách thời gian xem
             if len(df_raw_calc) > 0:
                 df_raw_calc["only_date"] = df_raw_calc["datetime_internal"].dt.date
                 available_dates = sorted(df_raw_calc["only_date"].unique())
@@ -307,21 +303,20 @@ with tab_past:
                     elif "1 Quý gần nhất" in time_filter_option:
                         df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= (max_time_in_file - timedelta(days=90))]
 
-            # 🛠️ THUẬT TOÁN GOM NHÓM
+            # 🛠️ THUẬT TOÁN GOM NHÓM THEO ĐÚNG YÊU CẦU:
+            # Gom trung bình thành 1 điểm dữ liệu / 1 ngày đối với Tuần, Tháng, Quý
             if len(df_raw_calc) > 0:
                 df_resample_input = df_raw_calc[["datetime_internal", "Nhiệt độ (°C)", "Độ ẩm (%)"]].copy()
                 df_resample_input.set_index("datetime_internal", inplace=True)
                 
-                if "1 Tuần gần nhất" in time_filter_option or "1 Tháng gần nhất" in time_filter_option:
-                    df_resampled = df_resample_input.resample("1h").mean().dropna()
-                    df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%d/%m %H:00")
-                elif "1 Quý gần nhất" in time_filter_option:
+                if any(k in time_filter_option for k in ["1 Tuần gần nhất", "1 Tháng gần nhất", "1 Quý gần nhất"]):
+                    # ✨ Đổi thành "1d" (1 Ngày) để gom lấy chỉ số trung bình của cả ngày
                     df_resampled = df_resample_input.resample("1d").mean().dropna()
                     df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%d/%m")
                 elif "Xem toàn bộ" in time_filter_option:
                     df_resampled = df_resample_input.copy()
                     df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%d/%m %H:%M:%S")
-                else:
+                else: # 1 Ngày cụ thể hoặc 1 ngày gần nhất -> Giữ gom 10 phút chi tiết
                     df_resampled = df_resample_input.resample("10min").mean().dropna()
                     df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%H:%M")
                 
@@ -334,7 +329,7 @@ with tab_past:
             df_processed["Độ ẩm (%)"] = df_resampled["Độ ẩm (%)"].round(2)
             df_processed["Hiển thị Giờ"] = df_resampled["Hiển thị Giờ"]
             
-            # Áp dụng công thức tính toán VPD đồng bộ sang Tab Realtime (nhận vào nhiệt độ và độ ẩm chuẩn đã chia)
+            # Tính toán chỉ số VPD từ cặp Nhiệt độ và Độ ẩm trung bình của ngày đó
             df_processed["VPD (kPa)"] = df_processed.apply(lambda row: round(calculate_vpd(row["Nhiệt độ (°C)"], row["Độ ẩm (%)"]), 2), axis=1)
             df_processed["Ngày"] = "Dữ liệu File"
             df_processed["Trạng thái"] = df_processed["VPD (kPa)"].apply(lambda x: "⚠️ Quá ẩm" if x < vpd_min else ("✅ Lý tưởng" if x <= vpd_max else "🚨 Quá khô"))
@@ -373,4 +368,4 @@ with tab_past:
         except Exception as err:
             st.error(f"❌ Cấu trúc tệp không tương thích hoặc lỗi xử lý lịch ngày tùy chỉnh. Chi tiết lỗi: {err}")
     else:
-        st.info("💡 Hệ thống tự động bóc tách: Gom trung bình 10 phút cho chu kỳ xem ngày giúp tối ưu tốc độ biểu đồ và xử lý mượt mà.")
+        st.info("💡 Hệ thống tự động bóc tách: Gom dữ liệu theo ngày cho chu kỳ dài hạn giúp tối ưu tốc độ biểu đồ và xử lý mượt mà.")
