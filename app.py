@@ -37,6 +37,10 @@ if 'plant_idx' not in st.session_state: st.session_state.plant_idx = 0
 if 'vpd_range_val' not in st.session_state: st.session_state.vpd_range_val = (0.6, 1.0)
 if 'simulated_time' not in st.session_state: st.session_state.simulated_time = "2026-05-24 07:00:00"
 
+# Các session state bổ sung cho việc cấu hình cây trồng độc lập ở Tab 2 (Tải File)
+if 'file_plant_idx' not in st.session_state: st.session_state.file_plant_idx = 0
+if 'file_vpd_range_val' not in st.session_state: st.session_state.file_vpd_range_val = (0.6, 1.0)
+
 def setup_next_day():
     current_dt = datetime.strptime(st.session_state.simulated_time, "%Y-%m-%d %H:%M:%S")
     next_day_dt = current_dt + timedelta(hours=7) if current_dt.hour == 0 and current_dt.minute == 0 else current_dt + timedelta(days=1)
@@ -142,7 +146,7 @@ with tab_future:
 
             vpd_result = calculate_vpd(st.session_state.temp, st.session_state.rh)
             with st.container(border=True):
-                st.markdown("<p style='color:#2E7D32; font-weight:bold; margin-bottom:2px;'>🎯 TRUNG TÂM ĐIỀU HÀNH LỆỂNH</p>", unsafe_allow_html=True)
+                st.markdown("<p style='color:#2E7D32; font-weight:bold; margin-bottom:2px;'>🎯 TRUNG TÂM ĐIỀU HÀNH LỆNH</p>", unsafe_allow_html=True)
                 if st.session_state.stt_counter == 0:
                     st.info("Đang chờ kích hoạt trạm...")
                 else:
@@ -199,11 +203,26 @@ with tab_future:
 
 
 # =========================================================================
-# 📁 TAB 2: CẬP NHẬT THUẬT TOÁN GOM TRUNG BÌNH 1 ĐIỂM / 1 NGÀY CHO TUẦN/THÁNG/QUÝ
+# 📁 TAB 2: CÓ CHỨC NĂNG CHỌN CÂY TRỒNG VÀ NGƯỠNG TÙY CHỈNH ĐỘC LẬP CHO FILE
 # =========================================================================
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 18px;'>📁 TỰ ĐỘNG PHÂN TÍCH FILE IOT (JSON / CSV / XLSX)</h3>", unsafe_allow_html=True)
     
+    # Khu vực cấu hình Ngưỡng & Cây trồng độc lập cho việc tải file
+    with st.container(border=True):
+        st.markdown("<p style='color:#1A5276; font-weight:bold; margin-bottom:5px; font-size:14px;'>🌿 CẤU HÌNH NGƯỠNG VPD CHO FILE TẢI LÊN</p>", unsafe_allow_html=True)
+        conf_col1, conf_col2 = st.columns([4, 6])
+        with conf_col1:
+            file_plant_list = ["🍓 Dâu tây Đà Lạt", "🌹 Hoa hồng nhà kính", "🌼 Hoa cúc / Hoa đồng tiền", "🍅 Cà chua bi / 🫑 Ớt chuông", "🛠️ Tùy chỉnh thủ công"]
+            file_plant_option = st.selectbox("Chọn mô hình cây trồng:", file_plant_list, index=st.session_state.file_plant_idx, key="file_plant_select")
+            st.session_state.file_plant_idx = file_plant_list.index(file_plant_option)
+            
+            file_default_range = (0.6, 1.0) if file_plant_option == "🍓 Dâu tây Đà Lạt" else ((0.8, 1.2) if file_plant_option == "🌹 Hoa hồng nhà kính" else ((0.7, 1.1) if file_plant_option == "🌼 Hoa cúc / Hoa đồng tiền" else ((0.8, 1.4) if file_plant_option == "🍅 Cà chua bi / 🫑 Ớt chuông" else st.session_state.file_vpd_range_val)))
+        with conf_col2:
+            file_vpd_range = st.slider("Ngưỡng VPD tối ưu áp dụng cho File (kPa):", min_value=0.0, max_value=3.0, value=file_default_range, step=0.1, key="file_vpd_slider", disabled=(file_plant_option != "🛠️ Tùy chỉnh thủ công"))
+            st.session_state.file_vpd_range_val = file_vpd_range
+            file_vpd_min, file_vpd_max = file_vpd_range
+
     upload_col1, upload_col2 = st.columns([5, 5])
     with upload_col1:
         uploaded_file = st.file_uploader("Kéo thả file IoT nhà kính của bạn vào đây:", type=["json", "csv", "xlsx"])
@@ -303,20 +322,19 @@ with tab_past:
                     elif "1 Quý gần nhất" in time_filter_option:
                         df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= (max_time_in_file - timedelta(days=90))]
 
-            # 🛠️ THUẬT TOÁN GOM NHÓM THEO ĐÚNG YÊU CẦU:
-            # Gom trung bình thành 1 điểm dữ liệu / 1 ngày đối với Tuần, Tháng, Quý
+            # THUẬT TOÁN GOM NHÓM THEO ĐÚNG YÊU CẦU:
             if len(df_raw_calc) > 0:
                 df_resample_input = df_raw_calc[["datetime_internal", "Nhiệt độ (°C)", "Độ ẩm (%)"]].copy()
                 df_resample_input.set_index("datetime_internal", inplace=True)
                 
                 if any(k in time_filter_option for k in ["1 Tuần gần nhất", "1 Tháng gần nhất", "1 Quý gần nhất"]):
-                    # ✨ Đổi thành "1d" (1 Ngày) để gom lấy chỉ số trung bình của cả ngày
+                    # Lấy chỉ số trung bình của cả ngày
                     df_resampled = df_resample_input.resample("1d").mean().dropna()
                     df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%d/%m")
                 elif "Xem toàn bộ" in time_filter_option:
                     df_resampled = df_resample_input.copy()
                     df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%d/%m %H:%M:%S")
-                else: # 1 Ngày cụ thể hoặc 1 ngày gần nhất -> Giữ gom 10 phút chi tiết
+                else:
                     df_resampled = df_resample_input.resample("10min").mean().dropna()
                     df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%H:%M")
                 
@@ -329,22 +347,24 @@ with tab_past:
             df_processed["Độ ẩm (%)"] = df_resampled["Độ ẩm (%)"].round(2)
             df_processed["Hiển thị Giờ"] = df_resampled["Hiển thị Giờ"]
             
-            # Tính toán chỉ số VPD từ cặp Nhiệt độ và Độ ẩm trung bình của ngày đó
+            # Tính toán chỉ số VPD từ cặp Nhiệt độ và Độ ẩm trung bình
             df_processed["VPD (kPa)"] = df_processed.apply(lambda row: round(calculate_vpd(row["Nhiệt độ (°C)"], row["Độ ẩm (%)"]), 2), axis=1)
             df_processed["Ngày"] = "Dữ liệu File"
-            df_processed["Trạng thái"] = df_processed["VPD (kPa)"].apply(lambda x: "⚠️ Quá ẩm" if x < vpd_min else ("✅ Lý tưởng" if x <= vpd_max else "🚨 Quá khô"))
+            # Đánh giá trạng thái dựa trên ngưỡng của File đã chọn ở trên
+            df_processed["Trạng thái"] = df_processed["VPD (kPa)"].apply(lambda x: "⚠️ Quá ẩm" if x < file_vpd_min else ("✅ Lý tưởng" if x <= file_vpd_max else "🚨 Quá khô"))
             
             st.write("") 
             
             res_left, res_right = st.columns([6.5, 3.5])
             with res_left:
-                st.markdown(f"##### 📈 Hệ thống Biểu đồ trích xuất từ File")
+                st.markdown(f"##### 📈 Hệ thống Biểu đồ trích xuất từ File ({file_plant_option})")
                 
                 file_sub_tab1, file_sub_tab2, file_sub_tab3, file_sub_tab4 = st.tabs([
                     "🎯 Chỉ số VPD", "🌡️ Nhiệt độ", "💧 Độ ẩm", "📊 Tổ hợp 3 chỉ số"
                 ])
                 with file_sub_tab1: 
-                    st.altair_chart(draw_vpd_chart(df_processed, vpd_min, vpd_max), use_container_width=True)
+                    # Truyền ngưỡng tối ưu đã chọn riêng của file vào biểu đồ
+                    st.altair_chart(draw_vpd_chart(df_processed, file_vpd_min, file_vpd_max), use_container_width=True)
                 with file_sub_tab2: 
                     st.altair_chart(draw_temperature_chart(df_processed), use_container_width=True)
                 with file_sub_tab3: 
