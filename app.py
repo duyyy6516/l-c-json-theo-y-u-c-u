@@ -14,10 +14,9 @@ TELE_CHAT_ID = "7290661009"
 
 st.set_page_config(page_title="VPD Farm Analytics", page_icon="🌿", layout="wide")
 
-# CẤU HÌNH GIAO DIỆN: Sửa lỗi thanh cuộn ngoài bị giật lag và giới hạn trượt
+# CẤU HÌNH GIAO DIỆN
 st.markdown("""
     <style>
-    /* Cho phép toàn bộ trang web trượt mượt mà, tự nhiên theo con lăn chuột */
     html, body, [data-testid="stAppViewContainer"] {
         overflow-y: auto !important;
         scroll-behavior: smooth;
@@ -152,7 +151,7 @@ with tab_future:
 
             vpd_result = calculate_vpd(st.session_state.temp, st.session_state.rh)
             with st.container(border=True):
-                st.markdown("<p style='color:#2E7D32; font-weight:bold; margin-bottom:2px;'>🎯 TRUNG TÂM ĐIỀU HÀNH LỆWIN</p>", unsafe_allow_html=True)
+                st.markdown("<p style='color:#2E7D32; font-weight:bold; margin-bottom:2px;'>🎯 TRUNG TÂM ĐIỀU HÀNH LỆNH</p>", unsafe_allow_html=True)
                 if st.session_state.stt_counter == 0:
                     st.info("Đang chờ kích hoạt trạm...")
                 else:
@@ -326,7 +325,6 @@ with tab_past:
 
             df_for_block_analysis = df_raw_calc.copy()
 
-            # 🛠️ ĐÃ SỬA: Giữ lại cột datetime_internal làm dữ liệu thực sau khi resample bằng pandas
             if len(df_raw_calc) > 0:
                 df_resample_input = df_raw_calc[["datetime_internal", "Nhiệt độ (°C)", "Độ ẩm (%)"]].copy()
                 df_resample_input.set_index("datetime_internal", inplace=True)
@@ -338,7 +336,7 @@ with tab_past:
                 else:
                     df_resampled = df_resample_input.resample("10min").mean().dropna()
                 
-                # Đưa cột Index thời gian quay trở lại làm cột dữ liệu thông thường để Charts.py nhận được dữ liệu vẽ đồ thị
+                # CHUẨN HÓA LẠI ĐÂY: Tạo trả lại cột datetime_internal sau khi resample
                 df_resampled["datetime_internal"] = df_resampled.index
                 df_resampled["Hiển thị Giờ"] = df_resampled["datetime_internal"].dt.strftime("%H:%M")
                 df_resampled.reset_index(drop=True, inplace=True)
