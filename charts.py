@@ -6,7 +6,6 @@ def draw_temperature_chart(df):
         return alt.Chart(pd.DataFrame()).mark_text()
         
     chart = alt.Chart(df).mark_line(color="#FF4B4B", point=True).encode(
-        # Chuyển đổi sang :T (Temporal) để mở khóa tính năng phóng to, thu nhỏ trục thời gian
         x=alt.X('datetime_internal:T', title="Mốc thời gian", axis=alt.Axis(format="%H:%M")), 
         y=alt.Y("Nhiệt độ (°C):Q", scale=alt.Scale(zero=False), axis=alt.Axis(title="Nhiệt độ (°C)")),
         tooltip=['Ngày', 'Hiển thị Giờ', "Nhiệt độ (°C)"]
@@ -45,33 +44,36 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
     except:
         actual_max_vpd = 2.0
         
-    Y_LIMIT = max(actual_max_vpd + 0.3, 2.0)
+    # Thiết lập đỉnh trục Y linh hoạt dựa trên dữ liệu thật
+    Y_LIMIT = max(actual_max_vpd + 0.5, 3.0)
     
-    # Khối nền màu xanh (Quá ẩm)
+    # 1. Khối nền màu xanh (Quá ẩm)
     rect_blue = alt.Chart(df).mark_rect(color='#0068C9', opacity=0.15).encode(
         y=alt.Y(datum=0.0),
         y2=alt.Y2(datum=vpd_min)
     )
     
-    # Khối nền màu đỏ (Quá khô)
+    # 2. Khối nền màu đỏ (Quá khô) - Khống chế độ cao phủ nền để tránh tràn ngập đồ thị
     rect_red = alt.Chart(df).mark_rect(color='#FF4B4B', opacity=0.15).encode(
         y=alt.Y(datum=vpd_max),
-        y2=alt.Y2(datum=Y_LIMIT)
+        y2=alt.Y2(datum=min(vpd_max + 1.0, Y_LIMIT))
     )
     
-    # Đường đồ thị chính màu xanh lá cây đậm (Sử dụng datetime_internal:T)
-    line_vpd = alt.Chart(df).mark_line(color="#2E7D32", size=2.5, point=len(df) < 100).encode(
+    # 3. Đường đồ thị chính màu xanh lá cây đậm - Bật tương tác chuột TRỰC TIẾP tại đây
+    line_vpd = alt.Chart(df).mark_line(color="#2E7D32", size=2.5, point=len(df) < 100, clip=True).encode(
         x=alt.X('datetime_internal:T', title="Mốc thời gian", axis=alt.Axis(format="%H:%M")),
         y=alt.Y('VPD (kPa):Q', 
-               scale=alt.Scale(domain=[0.0, Y_LIMIT], clamp=True), 
+               scale=alt.Scale(domain=[0.0, Y_LIMIT]), 
                axis=alt.Axis(title="Chỉ số VPD (kPa)", grid=True)),
         tooltip=['Ngày', 'Hiển thị Giờ', 'VPD (kPa)', 'Trạng thái']
-    )
+    ).interactive() 
     
-    # Gộp các lớp dữ liệu và kích hoạt tương tác thu phóng ra bên ngoài
-    chart = (rect_blue + rect_red + line_vpd).properties(
+    # Gộp các lớp chồng lên nhau: Dìm rect_blue và rect_red làm nền, line_vpd nằm trên cùng nhận chuột
+    chart = alt.layer(
+        rect_blue, rect_red, line_vpd
+    ).properties(
         height=260
-    ).interactive().configure_axisX(  
+    ).configure_axisX(  
         labelAngle=-45,
         labelOverlap="greedy",
         labelPadding=8
@@ -102,7 +104,7 @@ def draw_combined_chart(df):
     weather_layer = alt.layer(line_t, line_r)
     
     line_v = base.mark_line(color="#2E7D32", size=3).encode(
-        y=alt.Y('VPD (kPa):Q', axis=alt.Axis(title="Áp suất VPD (kPa)", titleColor='#2E7D32'), scale=alt.Scale(domain=[0.0, 2.0], clamp=True)),
+        y=alt.Y('VPD (kPa):Q', axis=alt.Axis(title="Áp suất VPD (kPa)", titleColor='#2E7D32'), scale=alt.Scale(domain=[0.0, 3.0], clamp=True)),
         tooltip=['Hiển thị Giờ', 'VPD (kPa)', 'Trạng thái']
     )
     
