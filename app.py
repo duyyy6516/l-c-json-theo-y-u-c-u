@@ -86,7 +86,7 @@ def trigger_new_data(vpd_min, vpd_max):
         st.session_state.is_completed = True   
     st.session_state.simulated_time = next_sim_datetime.strftime("%Y-%m-%d %H:%M:%S")
 
-# Khởi tạo 2 Tab chính của ứng dụng
+# Khởi tạo 2 Tab giao diện chính
 tab_future, tab_past = st.tabs(["🔮 XEM DỰ BÁO & THEO DÕI TƯƠNG LAI", "📁 TẢI FILE & PHÂN TÍCH LỊCH SỬ"])
 
 # =========================================================================
@@ -200,7 +200,7 @@ with tab_future:
 
 
 # =========================================================================
-# 📁 TAB 2: TỰ ĐỘNG PHÂN TÍCH FILE IOT - ĐỒNG BỘ CẤU TRÚC 4 BIỂU ĐỒ CON
+# 📁 TAB 2: TỰ ĐỘNG PHÂN TÍCH FILE IOT (XỬ LÝ ĐỊNH DẠNG THỜI GIAN THÔNG MINH)
 # =========================================================================
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 18px;'>📁 TỰ ĐỘNG PHÂN TÍCH FILE IOT (JSON / CSV / XLSX)</h3>", unsafe_allow_html=True)
@@ -222,11 +222,11 @@ with tab_past:
             col_temp, col_rh, col_time = None, None, None
             for col in df_upload.columns:
                 col_lower = str(col).lower().strip()
-                if any(k in col_lower for k in ['temp', 'nhiet', 't°', 't(°c)', 'temperature', 'value1']):
+                if any(k in col_lower for k in ['tempkk', 'temp', 'nhiet', 't°', 't(°c)', 'temperature', 'value1']):
                     col_temp = col
-                if any(k in col_lower for k in ['rh', 'hum', 'do am', 'humidity', 'h(%)', 'value2']):
+                if any(k in col_lower for k in ['humikk', 'rh', 'hum', 'do am', 'humidity', 'h(%)', 'value2']):
                     col_rh = col
-                if any(k in col_lower for k in ['time', 'gio', 'date', 'timestamp', 'mốc', 'created_at', 'stt']):
+                if any(k in col_lower for k in ['thời gian', 'time', 'gio', 'date', 'timestamp', 'mốc', 'created_at']):
                     col_time = col
 
             if not col_temp and len(df_upload.columns) > 0: col_temp = df_upload.columns[0]
@@ -237,10 +237,22 @@ with tab_past:
             df_processed["Nhiệt độ (°C)"] = pd.to_numeric(df_upload[col_temp], errors='coerce')
             df_processed["Độ ẩm (%)"] = pd.to_numeric(df_upload[col_rh], errors='coerce')
             
-            try:
-                df_processed["Hiển thị Giờ"] = pd.to_datetime(df_upload[col_time]).dt.strftime('%H:%M')
-            except:
-                df_processed["Hiển thị Giờ"] = df_upload[col_time].astype(str)
+            # ✨ THUẬT TOÁN MỚI: Tự động trích xuất chuỗi thời gian (Hỗ trợ định dạng có cả dấu gạch ngang và khoảng cách)
+            times_list = []
+            for val in df_upload[col_time].astype(str):
+                cleaned_val = val.strip()
+                extracted_time = cleaned_val
+                # Nếu định dạng là chuỗi ngày giờ đầy đủ (Ví dụ: "2025-02-18 16-43-37")
+                if " " in cleaned_val:
+                    time_part = cleaned_val.split(" ")[1] # Lấy cụm phía sau: "16-43-37"
+                    # Chuẩn hóa dấu gạch ngang hoặc dấu hai chấm thành cấu trúc H:M chuẩn
+                    time_part = time_part.replace("-", ":")
+                    parts = time_part.split(":")
+                    if len(parts) >= 2:
+                        extracted_time = f"{parts[0]}:{parts[1]}" # Trích lấy "16:43"
+                times_list.append(extracted_time)
+                
+            df_processed["Hiển thị Giờ"] = times_list
                 
             df_processed = df_processed.dropna(subset=["Nhiệt độ (°C)", "Độ ẩm (%)"])
             df_processed["VPD (kPa)"] = df_processed.apply(lambda row: round(calculate_vpd(row["Nhiệt độ (°C)"], row["Độ ẩm (%)"]), 2), axis=1)
@@ -253,7 +265,6 @@ with tab_past:
             with res_left:
                 st.markdown("##### 📈 Hệ thống Biểu đồ trích xuất từ File")
                 
-                # ✨ ĐÃ SỬA THÀNH CÔNG: Tách cấu trúc thành 4 tab biểu đồ con riêng biệt giống Tab Future
                 file_sub_tab1, file_sub_tab2, file_sub_tab3, file_sub_tab4 = st.tabs([
                     "🎯 Chỉ số VPD", "🌡️ Nhiệt độ", "💧 Độ ẩm", "📊 Tổ hợp 3 chỉ số"
                 ])
