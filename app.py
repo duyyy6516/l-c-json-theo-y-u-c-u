@@ -199,18 +199,18 @@ with tab_future:
 
 
 # =========================================================================
-# 📁 TAB 2: TỰ ĐỘNG PHÂN TÍCH FILE IOT (NÂNG CẤP XỬ LÝ TRUNG BÌNH THÔNG MINH)
+# 📁 TAB 2: TỰ ĐỘNG PHÂN TÍCH FILE IOT (NÂNG CẤP CHỌN LỊCH & TRUNG BÌNH 10 PHÚT)
 # =========================================================================
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 18px;'>📁 TỰ ĐỘNG PHÂN TÍCH FILE IOT (JSON / CSV / XLSX)</h3>", unsafe_allow_html=True)
     
-    upload_col1, upload_col2 = st.columns([6, 4])
+    upload_col1, upload_col2 = st.columns([5, 5])
     with upload_col1:
         uploaded_file = st.file_uploader("Kéo thả file IoT nhà kính của bạn vào đây:", type=["json", "csv", "xlsx"])
     with upload_col2:
         time_filter_option = st.selectbox(
-            "📆 Chọn khoảng thời gian phân tích tùy ý:",
-            ["⏱️ 1 Ngày gần nhất (Hiện tất cả thô)", "📅 1 Tuần gần nhất (Tính trung bình Giờ)", "🗓️ 1 Tháng gần nhất (Tính trung bình Giờ)", "🏢 1 Quý gần nhất (Tính trung bình Ngày)", "📊 Xem toàn bộ dữ liệu file"]
+            "📆 Chọn chế độ xem / Khoảng cách thời gian:",
+            ["📆 Tự chọn một ngày cụ thể trên lịch", "⏱️ 1 Ngày gần nhất (Gom trung bình 10 phút)", "📅 1 Tuần gần nhất (Gom trung bình Giờ)", "🗓️ 1 Tháng gần nhất (Gom trung bình Giờ)", "🏢 1 Quý gần nhất (Gom trung bình Ngày)", "📊 Xem toàn bộ dữ liệu thô file"]
         )
     
     if uploaded_file:
@@ -260,39 +260,50 @@ with tab_past:
             df_raw_calc["Độ ẩm (%)"] = pd.to_numeric(df_upload[col_rh], errors='coerce')
             df_raw_calc = df_raw_calc.dropna(subset=["Nhiệt độ (°C)", "Độ ẩm (%)"]).sort_values("datetime_internal")
 
-            # Tiến hành cắt khoảng thời gian theo bộ lọc người dùng chọn
+            # ✨ THẢ THANH CHỌN LỊCH NGÀY TÙY Ý NẾU ĐƯỢC CHỌN
             if len(df_raw_calc) > 0:
-                max_time_in_file = df_raw_calc["datetime_internal"].max()
+                df_raw_calc["only_date"] = df_raw_calc["datetime_internal"].dt.date
+                available_dates = sorted(df_raw_calc["only_date"].unique())
                 
-                if "1 Ngày gần nhất" in time_filter_option:
-                    start_filter_time = max_time_in_file - timedelta(days=1)
-                    df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= start_filter_time]
-                elif "1 Tuần gần nhất" in time_filter_option:
-                    start_filter_time = max_time_in_file - timedelta(days=7)
-                    df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= start_filter_time]
-                elif "1 Tháng gần nhất" in time_filter_option:
-                    start_filter_time = max_time_in_file - timedelta(days=30)
-                    df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= start_filter_time]
-                elif "1 Quý gần nhất" in time_filter_option:
-                    start_filter_time = max_time_in_file - timedelta(days=90)
-                    df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= start_filter_time]
+                if "Tự chọn một ngày cụ thể" in time_filter_option:
+                    st.write("")
+                    selected_date = st.date_input(
+                        "👇 Hãy chọn ngày bạn muốn trích xuất dữ liệu:",
+                        value=available_dates[-1], # Mặc định lấy ngày cuối cùng trong file
+                        min_value=available_dates[0],
+                        max_value=available_dates[-1]
+                    )
+                    # Tiến hành lọc chính xác ngày người dùng bấm chọn
+                    df_raw_calc = df_raw_calc[df_raw_calc["only_date"] == selected_date]
+                else:
+                    # Logic cắt mốc lùi thời gian cho các lựa chọn khác
+                    max_time_in_file = df_raw_calc["datetime_internal"].max()
+                    if "1 Ngày gần nhất" in time_filter_option:
+                        df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= (max_time_in_file - timedelta(days=1))]
+                    elif "1 Tuần gần nhất" in time_filter_option:
+                        df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= (max_time_in_file - timedelta(days=7))]
+                    elif "1 Tháng gần nhất" in time_filter_option:
+                        df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= (max_time_in_file - timedelta(days=30))]
+                    elif "1 Quý gần nhất" in time_filter_option:
+                        df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= (max_time_in_file - timedelta(days=90))]
 
-            # 🛠️ QUY TẮC PHÂN LOẠI MỚI: 1 ngày hiện tất cả thô, trên 1 ngày gom nhóm tính trung bình
+            # 🛠️ THUẬT TOÁN GOM NHÓM ĐỒNG BỘ - TÍNH TRUNG BÌNH 10 PHÚT
             if len(df_raw_calc) > 0:
                 df_raw_calc.set_index("datetime_internal", inplace=True)
                 
                 if "1 Tuần gần nhất" in time_filter_option or "1 Tháng gần nhất" in time_filter_option:
-                    # LỚN HƠN 1 NGÀY: Gom nhóm tính TRUNG BÌNH cộng theo từng GIỜ
                     df_resampled = df_raw_calc.resample("1h").mean().dropna()
                     df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%d/%m %H:00")
                 elif "1 Quý gần nhất" in time_filter_option:
-                    # LỚN HƠN 1 NGÀY: Gom nhóm tính TRUNG BÌNH cộng theo từng NGÀY
                     df_resampled = df_raw_calc.resample("1d").mean().dropna()
                     df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%d/%m")
-                else:
-                    # 1 NGÀY HOẶC XEM TOÀN BỘ FILE: Giữ NGUYÊN TẤT CẢ các điểm dữ liệu thô chi tiết
+                elif "Xem toàn bộ" in time_filter_option:
                     df_resampled = df_raw_calc.copy()
-                    df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%H:%M:%S")
+                    df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%d/%m %H:%M:%S")
+                else:
+                    # ✨ ĐÃ SỬA: Gom nhóm trung bình 10 phút áp dụng cho "1 Ngày gần nhất" và "Tự chọn lịch ngày"
+                    df_resampled = df_raw_calc.resample("10T").mean().dropna()
+                    df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%H:%M")
                 
                 df_resampled.reset_index(inplace=True)
             else:
@@ -326,7 +337,7 @@ with tab_past:
                 
             with res_right:
                 st.markdown("##### 📋 Nhật ký VPD đã xử lý")
-                st.caption(f"Tổng số dòng dữ liệu hiển thị: {len(df_processed)} dòng.")
+                st.caption(f"Tổng số mốc dữ liệu hiển thị (sau gom nhóm): {len(df_processed)} điểm.")
                 preview_cols = ["Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]
                 st.dataframe(df_processed[preview_cols].head(300), use_container_width=True, hide_index=True, height=210)
                 
@@ -338,6 +349,6 @@ with tab_past:
                     use_container_width=True
                 )
         except Exception as err:
-            st.error(f"❌ Cấu trúc tệp không tương thích hoặc lỗi xử lý khoảng ngày tùy chỉnh. Chi tiết lỗi: {err}")
+            st.error(f"❌ Cấu trúc tệp không tương thích hoặc lỗi xử lý lịch ngày tùy chỉnh. Chi tiết lỗi: {err}")
     else:
-        st.info("💡 Hệ thống tự động bóc tách dữ liệu: Hiện đầy đủ chi tiết với chu kỳ 1 Ngày, tự động tính trung bình theo Giờ/Ngày với chu kỳ Tuần, Tháng, Quý.")
+        st.info("💡 Hệ thống tự động bóc tách: Gom trung bình 10 phút cho chu kỳ xem ngày giúp tối ưu tốc độ biểu đồ và xử lý mượt mà.")
