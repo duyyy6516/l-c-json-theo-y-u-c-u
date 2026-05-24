@@ -1,40 +1,3 @@
-import altair as alt
-import pandas as pd
-
-def draw_temperature_chart(df):
-    if df.empty: 
-        return alt.Chart(pd.DataFrame()).mark_text()
-        
-    chart = alt.Chart(df).mark_line(color="#FF4B4B", point=True).encode(
-        x=alt.X('Hiển thị Giờ:N', title="Mốc thời gian", sort=None), # Chuyển :O sang :N giúp giãn khoảng cách
-        y=alt.Y("Nhiệt độ (°C):Q", scale=alt.Scale(zero=False), axis=alt.Axis(title="Nhiệt độ (°C)")),
-        tooltip=['Ngày', 'Hiển thị Giờ', "Nhiệt độ (°C)"]
-    ).properties(height=250).interactive().configure_axisX(
-        labelAngle=-45,
-        labelOverlap="greedy",  # Thuật toán tự động lọc bỏ các mốc giờ trùng lặp khi file quá dày
-        labelPadding=8
-    ).configure_view(
-        strokeOpacity=0       # Xóa bỏ khung viền thô cứng để biểu đồ mở rộng tự nhiên
-    )
-    return chart
-
-def draw_humidity_chart(df):
-    if df.empty: 
-        return alt.Chart(pd.DataFrame()).mark_text()
-        
-    chart = alt.Chart(df).mark_line(color="#0068C9", point=True).encode(
-        x=alt.X('Hiển thị Giờ:N', title="Mốc thời gian", sort=None),
-        y=alt.Y("Độ ẩm (%):Q", scale=alt.Scale(zero=False), axis=alt.Axis(title="Độ ẩm (%)")),
-        tooltip=['Ngày', 'Hiển thị Giờ', "Độ ẩm (%)"]
-    ).properties(height=250).interactive().configure_axisX(
-        labelAngle=-45,
-        labelOverlap="greedy",
-        labelPadding=8
-    ).configure_view(
-        strokeOpacity=0
-    )
-    return chart
-
 def draw_vpd_chart(df, vpd_min, vpd_max):
     if len(df) == 0:
         return alt.Chart(df).mark_blank()
@@ -46,19 +9,19 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
         
     Y_LIMIT = max(actual_max_vpd + 0.3, 2.0)
     
-    # Khối màu xanh (Quá ẩm)
+    # Khối nền màu xanh biểu thị khu vực Quá ẩm
     rect_blue = alt.Chart(df).mark_rect(color='#0068C9', opacity=0.15).encode(
         y=alt.Y(datum=0.0),
         y2=alt.Y2(datum=vpd_min)
     )
     
-    # Khối màu đỏ (Quá khô)
+    # Khối nền màu đỏ biểu thị khu vực Quá khô
     rect_red = alt.Chart(df).mark_rect(color='#FF4B4B', opacity=0.15).encode(
         y=alt.Y(datum=vpd_max),
         y2=alt.Y2(datum=Y_LIMIT)
     )
     
-    # Đường đồ thị chính màu xanh lá cây đậm (Dùng :N thay vì :O để tránh bị nén dữ liệu)
+    # Đường đồ thị chính mượt mà màu xanh lá cây đậm (Bỏ .interactive() ở cuối biến này)
     line_vpd = alt.Chart(df).mark_line(color="#2E7D32", size=2.5, point=len(df) < 100).encode(
         x=alt.X('Hiển thị Giờ:N', title="Mốc thời gian", sort=None),
         y=alt.Y('VPD (kPa):Q', 
@@ -67,44 +30,10 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
         tooltip=['Ngày', 'Hiển thị Giờ', 'VPD (kPa)', 'Trạng thái']
     )
     
-    chart = (rect_blue + rect_red + line_vpd).properties(height=250).interactive().configure_axisX(
-        labelAngle=-45,
-        labelOverlap="greedy",
-        labelPadding=8
-    ).configure_view(
-        strokeOpacity=0
-    )
-    
-    return chart
-
-def draw_combined_chart(df):
-    if df.empty:
-        return alt.Chart(pd.DataFrame()).mark_text()
-
-    base = alt.Chart(df).encode(
-        x=alt.X('Hiển thị Giờ:N', title="Mốc thời gian", sort=None)
-    )
-    
-    line_t = base.mark_line(color='#FF4B4B', strokeDash=[3,3]).encode(
-        y=alt.Y("Nhiệt độ (°C):Q", axis=alt.Axis(title="Nhiệt độ / Độ ẩm", titleColor='#0068C9')),
-        tooltip=['Hiển thị Giờ', "Nhiệt độ (°C)"]
-    )
-    
-    line_r = base.mark_line(color='#0068C9').encode(
-        y=alt.Y("Độ ẩm (%):Q"),
-        tooltip=['Hiển thị Giờ', "Độ ẩm (%)"]
-    )
-    
-    weather_layer = alt.layer(line_t, line_r)
-    
-    line_v = base.mark_line(color="#2E7D32", size=3).encode(
-        y=alt.Y('VPD (kPa):Q', axis=alt.Axis(title="Áp suất VPD (kPa)", titleColor='#2E7D32'), scale=alt.Scale(domain=[0.0, 2.0], clamp=True)),
-        tooltip=['Hiển thị Giờ', 'VPD (kPa)', 'Trạng thái']
-    )
-    
-    chart = alt.layer(weather_layer, line_v).properties(height=250).resolve_scale(
-        y='independent'
-    ).interactive().configure_axisX(
+    # ĐƯỢC SỬA TẠI ĐÂY: Đưa .interactive() ra ngoài cùng sau khi gộp 3 lớp dữ liệu
+    chart = (rect_blue + rect_red + line_vpd).properties(
+        height=260
+    ).interactive().configure_axisX(  # Thêm .interactive() tại đây giúp kích hoạt phóng to toàn bộ biểu đồ
         labelAngle=-45,
         labelOverlap="greedy",
         labelPadding=8
