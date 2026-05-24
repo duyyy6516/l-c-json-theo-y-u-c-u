@@ -93,7 +93,7 @@ def trigger_new_data(vpd_min, vpd_max):
 tab_future, tab_past = st.tabs(["🔮 XEM DỰ BÁO & THEO DÕI TƯƠNG LAI", "📁 TẢI FILE & PHÂN TÍCH LỊCH SỬ"])
 
 # =========================================================================
-# TAB 1: GIỮ NGUYÊN HOÀN TOÀN LOGIC REALTIME (ĐÃ SỬA LỖI CÚ PHÁP ĐÓNG NGOẶC)
+# TAB 1: GIỮ NGUYÊN HOÀN TOÀN LOGIC REALTIME (KHÔNG THAY ĐỔI)
 # =========================================================================
 with tab_future:
     left_col, right_col = st.columns([3.5, 6.5])
@@ -203,7 +203,7 @@ with tab_future:
 
 
 # =========================================================================
-# 📁 TAB 2: TẢI FILE & PHÂN TÍCH TỔNG HỢP THEO BUỔI (HOÀN CHỈNH)
+# 📁 TAB 2: THÊM TÍNH NĂNG PHÂN TÍCH TỔNG HỢP THEO BUỔI KÈM CHẨN ĐOÁN & GIẢI PHÁP
 # =========================================================================
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 18px;'>📁 TỰ ĐỘNG PHÂN TÍCH FILE IOT (JSON / CSV / XLSX)</h3>", unsafe_allow_html=True)
@@ -318,6 +318,7 @@ with tab_past:
                     elif "1 Quý gần nhất" in time_filter_option:
                         df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= (max_time_in_file - timedelta(days=90))]
 
+            # Sao lưu dữ liệu gốc đã lọc thời gian để làm báo cáo phân tích theo buổi trước khi bị gom nhóm dài hạn
             df_for_block_analysis = df_raw_calc.copy()
 
             if len(df_raw_calc) > 0:
@@ -351,16 +352,19 @@ with tab_past:
             
             res_left, res_right = st.columns([6.5, 3.5])
             with res_left:
-                st.markdown(f"##### 📈 Hệ thống Biểu đồ trực quan ({file_plant_option})")
-                file_sub_tab1, file_sub_tab2, file_sub_tab3, file_sub_tab4 = st.tabs(["🎯 Chỉ số VPD", "🌡️ Nhiệt độ", "💧 Độ ẩm", "📊 Tổ hợp 3 chỉ số"])
+                st.markdown(f"##### 📈 Hệ thống Biểu đồ trích xuất từ File ({file_plant_option})")
+                
+                file_sub_tab1, file_sub_tab2, file_sub_tab3, file_sub_tab4 = st.tabs([
+                    "🎯 Chỉ số VPD", "🌡️ Nhiệt độ", "💧 Độ ẩm", "📊 Tổ hợp 3 chỉ số"
+                ])
                 with file_sub_tab1: st.altair_chart(draw_vpd_chart(df_processed, file_vpd_min, file_vpd_max), use_container_width=True)
                 with file_sub_tab2: st.altair_chart(draw_temperature_chart(df_processed), use_container_width=True)
                 with file_sub_tab3: st.altair_chart(draw_humidity_chart(df_processed), use_container_width=True)
                 with file_sub_tab4: st.altair_chart(draw_combined_chart(df_processed), use_container_width=True)
                 
             with res_right:
-                st.markdown("##### 📋 Nhật ký dữ liệu")
-                st.caption(f"Tổng điểm dữ liệu sau xử lý: {len(df_processed)}")
+                st.markdown("##### 📋 Nhật ký VPD đã xử lý")
+                st.caption(f"Tổng số mốc dữ liệu hiển thị (sau gom nhóm): {len(df_processed)} điểm.")
                 preview_cols = ["Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]
                 st.dataframe(df_processed[preview_cols].head(300), use_container_width=True, hide_index=True, height=210)
                 
@@ -372,10 +376,14 @@ with tab_past:
                     use_container_width=True
                 )
 
+            # =========================================================================
+            # ✨ KHU VỰC THÊM MỚI: BÁO CÁO PHÂN TÍCH TỔNG HỢP THEO BUỔI CHO FILE
+            # =========================================================================
             st.markdown("---")
             st.markdown(f"##### 📊 BÁO CÁO PHÂN TÍCH TỔNG HỢP THEO BUỔI (Từ dữ liệu File)")
             
             if len(df_for_block_analysis) > 0:
+                # Phân chia buổi dựa trên giờ của mốc internal datetime
                 df_for_block_analysis["Hour"] = df_for_block_analysis["datetime_internal"].dt.hour
                 
                 def assign_block(hour):
@@ -388,8 +396,11 @@ with tab_past:
                 df_for_block_analysis["Buổi"] = df_for_block_analysis["Hour"].apply(assign_block)
                 df_for_block_analysis["VPD_raw"] = df_for_block_analysis.apply(lambda r: calculate_vpd(r["Nhiệt độ (°C)"], r["Độ ẩm (%)"]), axis=1)
                 
+                # Gom nhóm tính trung bình chỉ số cho từng buổi
                 block_summary = df_for_block_analysis.groupby("Buổi").agg({
-                    "Nhiệt độ (°C)": "mean", "Độ ẩm (%)": "mean", "VPD_raw": "mean"
+                    "Nhiệt độ (°C)": "mean",
+                    "Độ ẩm (%)": "mean",
+                    "VPD_raw": "mean"
                 }).reindex(["🌅 Sáng (05h - 10h)", "☀️ Trưa (10h - 15h)", "🌇 Chiều (15h - 19h)", "🌌 Tối (19h - 23h)", "🌙 Khuya (23h - 05h)"]).dropna()
                 
                 block_report_rows = []
@@ -398,23 +409,28 @@ with tab_past:
                     avg_h = round(row["Độ ẩm (%)"], 1)
                     avg_v = round(row["VPD_raw"], 2)
                     
+                    # Thuật toán tự động chẩn đoán nguyên nhân và đưa ra biện pháp kỹ thuật nhà kính
                     if avg_v < file_vpd_min:
                         conclusion = "⚠️ CHƯA ĐẠT (Quá ẩm)"
-                        reason = f"Độ ẩm không khí tích tụ cao ({avg_h}%), nhiệt độ mát ẩm làm khép khí khổng."
-                        solution = "Bật quạt đối lưu, tăng nhẹ nhiệt độ sưởi hoặc ngưng tưới phun sương."
+                        reason = f"Độ ẩm không khí tích tụ cao ({avg_h}%), nhiệt độ mát ẩm làm khép khí khổng cây trồng."
+                        solution = "Bật quạt thông gió đối lưu, tăng nhẹ nhiệt độ sưởi hoặc ngưng tưới phun sương."
                     elif avg_v > file_vpd_max:
                         conclusion = "🚨 CHƯA ĐẠT (Quá khô)"
                         reason = f"Nhiệt độ cao ({avg_t}°C) kết hợp độ ẩm tụt sâu ({avg_h}%), bốc thoát hơi quá nhanh."
-                        solution = "Kéo lưới cắt nắng, kích hoạt phun sương hạt mịn hoặc hệ thống nhỏ giọt."
+                        solution = "Kéo lưới cắt nắng giảm nhiệt, kích hoạt phun sương hạt mịn hoặc hệ thống tưới nhỏ giọt."
                     else:
                         conclusion = "✅ LÝ TƯỞNG"
                         reason = "Sự cân bằng hoàn hảo giữa nhiệt độ và ẩm độ, cây mở khí khổng trao đổi chất tốt nhất."
                         solution = "Giữ vững chế độ vận hành hiện tại, duy trì cảm biến ổn định."
                         
                     block_report_rows.append({
-                        "Khoảng Buổi": idx, "Nhiệt độ TB": f"{avg_t} °C", "Độ ẩm TB": f"{avg_h} %",
-                        "VPD Trung Bình": f"{avg_v} kPa", "Đánh giá": conclusion,
-                        "Nguyên nhân cụ thể": reason, "Biện pháp kỹ thuật đề xuất": solution
+                        "Khoảng Buổi": idx,
+                        "Nhiệt độ TB": f"{avg_t} °C",
+                        "Độ ẩm TB": f"{avg_h} %",
+                        "VPD Trung Bình": f"{avg_v} kPa",
+                        "Đánh giá": conclusion,
+                        "Nguyên nhân cụ thể": reason,
+                        "Biện pháp kỹ thuật đề xuất": solution
                     })
                 
                 df_block_report = pd.DataFrame(block_report_rows)
@@ -423,6 +439,6 @@ with tab_past:
                 st.info("Chưa có đủ mốc thời gian thích hợp để phân tích chu kỳ buổi.")
 
         except Exception as err:
-            st.error(f"❌ Không thể xử lý file. Chi tiết lỗi: {err}")
+            st.error(f"❌ Cấu trúc tệp không tương thích hoặc lỗi xử lý lịch ngày tùy chỉnh. Chi tiết lỗi: {err}")
     else:
         st.info("💡 Hệ thống tự động bóc tách: Gom dữ liệu theo ngày cho chu kỳ dài hạn giúp tối ưu tốc độ biểu đồ và xử lý mượt mà.")
