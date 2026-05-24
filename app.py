@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 
-# Import module nội bộ từ Git của bạn
+# Import module nội bộ từ Git
 from calculations import calculate_vpd, get_weather_by_time
 from services import send_telegram_message, get_quick_solution
 from analytics import analyze_day_by_blocks_rt, predict_vpd_trend_v3
@@ -12,38 +12,26 @@ from charts import draw_temperature_chart, draw_humidity_chart, draw_vpd_chart, 
 TELE_TOKEN = "8917951413:AAE6LKUEfYEYiQrFWGoKsQn0tumZc_XbcHg"
 TELE_CHAT_ID = "7290661009"
 
-# BẮT BUỘC: Đổi sang layout "wide" để tận dụng chiều ngang màn hình
 st.set_page_config(page_title="VPD Đà Lạt Realtime", page_icon="🌿", layout="wide")
 
-# =========================================================================
-# 🛠️ ĐOẠN CSS ĐÃ SỬA: TĂNG PADDING-TOP ĐỂ TIÊU ĐỀ KHÔNG BỊ CHE KHUẤT
-# =========================================================================
 st.markdown("""
     <style>
-    /* Tăng padding-top lên 2.5rem để đẩy toàn bộ nội dung xuống dưới thanh bar Streamlit */
-    .block-container {
-        padding-top: 2.5rem; 
-        padding-bottom: 0rem; 
-        padding-left: 1.5rem; 
-        padding-right: 1.5rem;
-    }
+    .block-container { padding-top: 2.5rem; padding-bottom: 0rem; padding-left: 1.5rem; padding-right: 1.5rem; }
+    h3 { margin-top: 0.2rem; margin-bottom: 0.8rem; padding-top: 0.2rem; }
+    div[st-delegate="element-container"] { margin-bottom: 0.3rem; }
     
-    /* Tạo khoảng cách thông thoáng hợp lý cho tiêu đề hai cột */
-    h3 {
-        margin-top: 0.2rem; 
-        margin-bottom: 0.8rem; 
-        padding-top: 0.2rem;
+    /* Thiết kế các khung cảnh báo nổi bần bật khi sắp chạm ngưỡng */
+    .danger-box-red {
+        padding: 12px; background-color: #FFEBEE; border-left: 6px solid #FF1744; 
+        color: #B71C1C; font-weight: bold; font-size: 15px; border-radius: 4px; margin-bottom: 8px;
     }
-    
-    /* Thu hẹp nhẹ khoảng cách giữa các khối để giữ giao diện gọn gàng */
-    div[st-delegate="element-container"] {
-        margin-bottom: 0.3rem;
+    .danger-box-blue {
+        padding: 12px; background-color: #E3F2FD; border-left: 6px solid #2979FF; 
+        color: #0D47A1; font-weight: bold; font-size: 15px; border-radius: 4px; margin-bottom: 8px;
     }
     </style>
     """, unsafe_allow_html=True)
-# =========================================================================
 
-# Khởi tạo trạng thái Session State
 if 'temp' not in st.session_state: st.session_state.temp = 0.0
 if 'rh' not in st.session_state: st.session_state.rh = 0.0
 if 'countdown' not in st.session_state: st.session_state.countdown = 15 
@@ -87,13 +75,15 @@ def trigger_new_data(vpd_min, vpd_max):
         sol = get_quick_solution(new_vpd, vpd_min, vpd_max, current_sim_datetime.hour)
         unique_days = sorted(list(set([r["Ngày"] for r in st.session_state.history])), reverse=True)
         history_of_latest_day = [r for r in st.session_state.history if r["Ngày"] == (unique_days[0] if unique_days else current_date_str)]
-        trend, _ = predict_vpd_trend_v3(history_of_latest_day, current_sim_datetime.hour)
+        trend, trend_type = predict_vpd_trend_v3(history_of_latest_day, current_sim_datetime.hour, vpd_min, vpd_max)
         
+        prefix = "🚨 [CẢNH BÁO SỚM] " if "CẢNH BÁO SỚM" in trend else ""
         telegram_msg = (
-            f"🌿 *HỆ THỐNG VPD ĐÀ LẠT REALTIME*\n⏰ Thời gian: {current_date_str} - {current_sim_datetime.strftime('%H:%M')}\n"
+            f"🌿 *HỆ THỐNG VPD ĐÀ LẠT REALTIME*\n⏰ {current_date_str} - {current_sim_datetime.strftime('%H:%M')}\n"
             f"📊 Môi trường: {st.session_state.temp}°C | {st.session_state.rh}%\n\n"
-            f"*1️⃣ Trạng thái:* Chỉ số đạt *{new_vpd:.2f} kPa* — *{tele_status}*\n"
-            f"*2️⃣ Đề xuất:* _{sol}_\n*3️⃣ Xuương:* {trend}"
+            f"*1️⃣ Hiện trạng:* *{new_vpd:.2f} kPa* — {tele_status}\n"
+            f"*2️⃣ Biện pháp pháp:* _{sol}_\n"
+            f"*3️⃣ Dự báo:* {prefix}_{trend}_"
         )
         send_telegram_message(TELE_TOKEN, TELE_CHAT_ID, telegram_msg)
     
@@ -103,16 +93,13 @@ def trigger_new_data(vpd_min, vpd_max):
         st.session_state.is_completed = True   
     st.session_state.simulated_time = next_sim_datetime.strftime("%Y-%m-%d %H:%M:%S")
 
-# --- CHIA MÀN HÌNH THÀNH 2 CỘT LỚN (TỶ LỆ 35% VÀ 65%) ---
+# --- CHIA MÀN HÌNH ---
 left_col, right_col = st.columns([3.5, 6.5])
 
-# =========================================================
-# ⬅️ CỘT TRÁI: ĐIỀU KHIỂN & TRẠNG THÁI REALTIME
-# =========================================================
+# ⬅️ CỘT TRÁI
 with left_col:
     st.markdown("<h3 style='color: #2E7D32; font-size: 20px;'>🌿 CẤU HÌNH & ĐIỀU HÀNH REALTIME</h3>", unsafe_allow_html=True)
     
-    # Khối 1: Hệ thống nút bấm điều khiển
     with st.container(border=True):
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
@@ -126,7 +113,6 @@ with left_col:
                 st.session_state.is_running = False
                 st.rerun()
                 
-    # Khối 2: Cấu hình cây trồng
     with st.container(border=True):
         plant_list = ["🍓 Dâu tây Đà Lạt", "🌹 Hoa hồng nhà kính", "🌼 Hoa cúc / Hoa đồng tiền", "🍅 Cà chua bi / 🫑 Ớt chuông", "🛠️ Tùy chỉnh thủ công"]
         plant_option = st.selectbox("Cây trồng:", plant_list, index=st.session_state.plant_idx, disabled=st.session_state.is_running, label_visibility="collapsed")
@@ -137,7 +123,6 @@ with left_col:
         st.session_state.vpd_range_val = vpd_range
         vpd_min, vpd_max = vpd_range
 
-    # Khối đếm giây
     run_interval = 1 if st.session_state.is_running else 999999
 
     @st.fragment(run_every=run_interval)
@@ -148,25 +133,21 @@ with left_col:
                 trigger_new_data(vpd_min, vpd_max)
                 st.rerun()
                 
-        if st.session_state.is_running:
-            st.caption(f"⏳ Đổi số sau: **{st.session_state.countdown}s**")
-        elif st.session_state.is_completed:
-            st.success("🏁 Hết ngày! Nhấn 'Bắt đầu' để sang ngày tiếp.")
+        if st.session_state.is_running: st.caption(f"⏳ Đổi số sau: **{st.session_state.countdown}s**")
+        elif st.session_state.is_completed: st.success("🏁 Hết ngày!")
 
         current_sim_dt = datetime.strptime(st.session_state.simulated_time, "%Y-%m-%d %H:%M:%S")
         current_date_display = current_sim_dt.strftime("Ngày %d/%m")
         
-        # Khối 3: Chỉ số môi trường Realtime hiện tại
         with st.container(border=True):
             st.markdown(f"⏰ **{current_date_display} — {current_sim_dt.strftime('%H:%M')}**")
             col1, col2 = st.columns(2)
             with col1: st.metric(label="🌡️ Nhiệt độ", value=f"{st.session_state.temp}°C" if st.session_state.stt_counter > 0 else "--°C")
             with col2: st.metric(label="💧 Độ ẩm", value=f"{st.session_state.rh}%" if st.session_state.stt_counter > 0 else "--%")
 
-        # Khối 4: Trung tâm phân tích lệnh điều hành cứu nguy
         vpd_result = calculate_vpd(st.session_state.temp, st.session_state.rh)
         with st.container(border=True):
-            st.markdown("<p style='color:#2E7D32; font-weight:bold; margin-bottom:2px;'>🎯 LỆNH ĐIỀU HÀNH KHẨN CẤP</p>", unsafe_allow_html=True)
+            st.markdown("<p style='color:#2E7D32; font-weight:bold; margin-bottom:2px;'>🎯 TRUNG TÂM ĐIỀU HÀNH LỆNH</p>", unsafe_allow_html=True)
             if st.session_state.stt_counter == 0:
                 st.info("Đang chờ kích hoạt trạm...")
             else:
@@ -176,28 +157,33 @@ with left_col:
                 unique_days = sorted(list(set([r["Ngày"] for r in st.session_state.history])), reverse=True)
                 history_of_latest_day = [r for r in st.session_state.history if r["Ngày"] == (unique_days[0] if unique_days else current_date_display)]
                 
-                st.markdown(f"**VPD:** <span style='color: {text_color}; font-weight: bold; font-size:18px;'>{vpd_result:.2f} kPa</span> ({status_lbl})", unsafe_allow_html=True)
-                st.markdown(f"**Giải pháp:** _{get_quick_solution(vpd_result, vpd_min, vpd_max, current_sim_dt.hour)}_")
-                st.markdown(f"**Xu hướng:** {predict_vpd_trend_v3(history_of_latest_day, current_sim_dt.hour)[0]}")
-                st.caption("🚀 Tin nhắn đồng bộ đang được đẩy về Telegram túi quần của bạn!")
+                # Gọi thuật toán nâng cấp
+                trend, trend_type = predict_vpd_trend_v3(history_of_latest_day, current_sim_dt.hour, vpd_min, vpd_max)
+                
+                # --- PHÓNG TO, LÀM MẠNH CẢNH BÁO CHẠM BIÊN NẾU CÓ ---
+                if trend_type == "danger_red":
+                    st.markdown(f"<div class='danger-box-red'>🚨 {trend}</div>", unsafe_allow_html=True)
+                elif trend_type == "danger_blue":
+                    st.markdown(f"<div class='danger-box-blue'>🚨 {trend}</div>", unsafe_allow_html=True)
+                
+                st.markdown(f"**VPD Hiện Tại:** <span style='color: {text_color}; font-weight: bold; font-size:18px;'>{vpd_result:.2f} kPa</span> ({status_lbl})", unsafe_allow_html=True)
+                st.markdown(f"**Biện pháp kỹ thuật:** _{get_quick_solution(vpd_result, vpd_min, vpd_max, current_sim_dt.hour)}_")
+                
+                if trend_type not in ["danger_red", "danger_blue"]:
+                    st.markdown(f"**Dự báo chu kỳ:** {trend}")
 
     left_panel_monitor()
 
-# =========================================================
-# ➡️ CỘT PHẢI: TRUNG TÂM PHÂN TÍCH ĐỒ THỊ & DỮ LIỆU SỐ
-# =========================================================
+# ➡️ CỘT PHẢI (Giữ nguyên cấu trúc tab nén)
 with right_col:
     st.markdown("<h3 style='color: #2E7D32; font-size: 20px;'>📊 TRUNG TÂM PHÂN TÍCH CHU KỲ & LỊCH SỬ NHÀ KÍNH</h3>", unsafe_allow_html=True)
     
     if len(st.session_state.history) == 0:
-        st.info("Chưa có số liệu. Vui lòng bấm '▶️ Bắt đầu' ở cột bên trái để vẽ đồ thị.")
+        st.info("Chưa có số liệu. Vui lòng bấm '▶️ Bắt đầu' để tải dữ liệu.")
     else:
         unique_days = sorted(list(set([r["Ngày"] for r in st.session_state.history])), reverse=True)
-        
-        # Thanh chọn ngày và reset nằm ngang tiết kiệm chỗ
         filter_col1, filter_col2 = st.columns([7, 3])
-        with filter_col1:
-            selected_view_day = st.selectbox("Lọc ngày lịch sử:", unique_days, label_visibility="collapsed")
+        with filter_col1: selected_view_day = st.selectbox("Lọc ngày:", unique_days, label_visibility="collapsed")
         with filter_col2:
             if st.button("🗑️ Reset All", use_container_width=True):
                 st.session_state.stt_counter = 0; st.session_state.history = []; st.session_state.simulated_time = "2026-05-24 07:00:00"
@@ -207,10 +193,7 @@ with right_col:
         df_all_records = pd.DataFrame(st.session_state.history)
         df_filtered = df_all_records[df_all_records["Ngày"] == selected_view_day].iloc[::-1].copy()
 
-        # Hệ thống Tab lớn
         main_tab1, main_tab2, main_tab3 = st.tabs(["📈 Biểu đồ trực quan", "📊 Thống kê theo buổi", "📋 Bảng Nhật ký số liệu"])
-        
-        # --- TAB 1: BIỂU ĐỒ VỆ TINH ---
         with main_tab1:
             sub_t1, sub_t2, sub_t3, sub_t4 = st.tabs(["🎯 Chỉ số VPD", "🌡️ Nhiệt độ", "💧 Độ ẩm", "📊 Tổ hợp 3 chỉ số"])
             with sub_t1: st.altair_chart(draw_vpd_chart(df_filtered, vpd_min, vpd_max), use_container_width=True)
@@ -218,13 +201,10 @@ with right_col:
             with sub_t3: st.altair_chart(draw_humidity_chart(df_filtered), use_container_width=True)
             with sub_t4: st.altair_chart(draw_combined_chart(df_filtered), use_container_width=True)
             
-        # --- TAB 2: PHÂN TÍCH THEO BUỔI ---
         with main_tab2:
-            st.markdown(f"<p style='font-size:13px; color:gray; margin-bottom:2px;'>Báo cáo trung bình các mốc thời gian của ngày {selected_view_day}:</p>", unsafe_allow_html=True)
             report_df = analyze_day_by_blocks_rt(st.session_state.history, vpd_min, vpd_max, selected_view_day)
             st.dataframe(report_df, use_container_width=True, hide_index=True, height=180)
             
-        # --- TAB 3: BẢNG SỐ LIỆU CHI TIẾT ---
         with main_tab3:
             df_display = df_filtered.iloc[::-1].copy()
             df_display["Thời gian"] = df_display["Hiển thị Giờ"]
