@@ -5,32 +5,32 @@ def draw_temperature_chart(df):
         x=alt.X('Hiển thị Giờ:O', axis=alt.Axis(title="Mốc thời gian", labelAngle=-45)), 
         y=alt.Y("Nhiệt độ (°C):Q", scale=alt.Scale(zero=False), axis=alt.Axis(title="Nhiệt độ (°C)")),
         tooltip=['Ngày', 'Hiển thị Giờ', "Nhiệt độ (°C)"]
-    ).properties(height=200).interactive() # Đã hạ xuống 200px để vừa khít màn hình
+    ).properties(height=200).interactive()
 
 def draw_humidity_chart(df):
     return alt.Chart(df).mark_line(color="#0068C9", point=True).encode(
         x=alt.X('Hiển thị Giờ:O', axis=alt.Axis(title="Mốc thời gian", labelAngle=-45)),
         y=alt.Y("Độ ẩm (%):Q", scale=alt.Scale(zero=False), axis=alt.Axis(title="Độ ẩm (%)")),
         tooltip=['Ngày', 'Hiển thị Giờ', "Độ ẩm (%)"]
-    ).properties(height=200).interactive() # Đã hạ xuống 200px để vừa khít màn hình
+    ).properties(height=200).interactive()
 
 def draw_vpd_chart(df, vpd_min, vpd_max):
-    # Giải pháp đổ màu tràn viền cố định khung Y từ 0 đến 2.0 kPa
+    # Giải pháp phủ màu tràn viền vô cực: Ép dải màu luôn bám sát mép trên và dưới của đồ thị
     rect_blue = alt.Chart(df).mark_rect(color='#0068C9', opacity=0.12).encode(
-        y=alt.Y(datum=0.0),
+        y=alt.Y(datum=-5.0),
         y2=alt.Y2(datum=vpd_min)
     )
     rect_red = alt.Chart(df).mark_rect(color='#FF4B4B', opacity=0.12).encode(
         y=alt.Y(datum=vpd_max),
-        y2=alt.Y2(datum=2.0)
+        y2=alt.Y2(datum=10.0)
     )
     line_vpd = alt.Chart(df).mark_line(color="#2E7D32", point=True).encode(
         x=alt.X('Hiển thị Giờ:O', axis=alt.Axis(title="Mốc thời gian", labelAngle=-45)),
-        y=alt.Y('VPD (kPa):Q', scale=alt.Scale(domain=[0, 2.0]), axis=alt.Axis(title="Chỉ số VPD (kPa)", grid=True)),
+        y=alt.Y('VPD (kPa):Q', scale=alt.Scale(zero=False), axis=alt.Axis(title="Chỉ số VPD (kPa)", grid=True)),
         tooltip=['Ngày', 'Hiển thị Giờ', 'VPD (kPa)', 'Trạng thái']
     ).interactive() 
     
-    return (rect_blue + rect_red + line_vpd).properties(height=210) # Chiều cao tối ưu cho Tab 1
+    return (rect_blue + rect_red + line_vpd).properties(height=210)
 
 def draw_combined_chart(df):
     base = alt.Chart(df).encode(x=alt.X('Hiển thị Giờ:O', axis=alt.Axis(title="Mốc thời gian", labelAngle=-45)))
