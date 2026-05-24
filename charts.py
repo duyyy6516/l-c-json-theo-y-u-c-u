@@ -1,15 +1,16 @@
 import altair as alt
 
 def draw_temperature_chart(df):
+    # Thay maxBins bằng tickCount=24 để giới hạn số lượng nhãn hiển thị trên trục X một cách hợp lệ
     return alt.Chart(df).mark_line(color="#FF4B4B", point=True).encode(
-        x=alt.X('Hiển thị Giờ:O', axis=alt.Axis(title="Mốc thời gian", labelAngle=-45, maxBins=24)), 
+        x=alt.X('Hiển thị Giờ:O', axis=alt.Axis(title="Mốc thời gian", labelAngle=-45, tickCount=24)), 
         y=alt.Y("Nhiệt độ (°C):Q", scale=alt.Scale(zero=False), axis=alt.Axis(title="Nhiệt độ (°C)")),
         tooltip=['Ngày', 'Hiển thị Giờ', "Nhiệt độ (°C)"]
     ).properties(height=200).interactive()
 
 def draw_humidity_chart(df):
     return alt.Chart(df).mark_line(color="#0068C9", point=True).encode(
-        x=alt.X('Hiển thị Giờ:O', axis=alt.Axis(title="Mốc thời gian", labelAngle=-45, maxBins=24)),
+        x=alt.X('Hiển thị Giờ:O', axis=alt.Axis(title="Mốc thời gian", labelAngle=-45, tickCount=24)),
         y=alt.Y("Độ ẩm (%):Q", scale=alt.Scale(zero=False), axis=alt.Axis(title="Độ ẩm (%)")),
         tooltip=['Ngày', 'Hiển thị Giờ', "Độ ẩm (%)"]
     ).properties(height=200).interactive()
@@ -28,9 +29,9 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
         y2=alt.Y2(datum=Y_LIMIT)
     )
     
-    # Tự động ẩn bớt nhãn mốc giờ nếu file tải lên quá nhiều dòng dữ liệu (maxBins=24)
+    # Đã sửa: Sử dụng tickCount=24 để Altair tự động tính toán ẩn bớt chữ nếu file JSON quá nặng
     line_vpd = alt.Chart(df).mark_line(color="#2E7D32", point=len(df) < 50).encode(
-        x=alt.X('Hiển thị Giờ:O', axis=alt.Axis(title="Mốc thời gian", labelAngle=-45, maxBins=24)),
+        x=alt.X('Hiển thị Giờ:O', axis=alt.Axis(title="Mốc thời gian", labelAngle=-45, tickCount=24)),
         y=alt.Y('VPD (kPa):Q', scale=alt.Scale(domain=[0.0, Y_LIMIT]), axis=alt.Axis(title="Chỉ số VPD (kPa)", grid=True)),
         tooltip=['Ngày', 'Hiển thị Giờ', 'VPD (kPa)', 'Trạng thái']
     ).interactive() 
@@ -38,7 +39,7 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
     return (rect_blue + rect_red + line_vpd).properties(height=210)
 
 def draw_combined_chart(df):
-    base = alt.Chart(df).encode(x=alt.X('Hiển thị Giờ:O', axis=alt.Axis(title="Mốc thời gian", labelAngle=-45, maxBins=24)))
+    base = alt.Chart(df).encode(x=alt.X('Hiển thị Giờ:O', axis=alt.Axis(title="Mốc thời gian", labelAngle=-45, tickCount=24)))
     line_t = base.mark_line(color='#FF4B4B', strokeDash=[3,3]).encode(
         y=alt.Y("Nhiệt độ (°C):Q", axis=alt.Axis(title="Nhiệt độ / Độ ẩm", titleColor='#0068C9')),
         tooltip=['Hiển thị Giờ', "Nhiệt độ (°C)"]
