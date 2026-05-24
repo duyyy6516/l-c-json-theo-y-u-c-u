@@ -86,8 +86,12 @@ def trigger_new_data(vpd_min, vpd_max):
         st.session_state.is_completed = True   
     st.session_state.simulated_time = next_sim_datetime.strftime("%Y-%m-%d %H:%M:%S")
 
+# Khởi tạo 2 Tab chính của ứng dụng
 tab_future, tab_past = st.tabs(["🔮 XEM DỰ BÁO & THEO DÕI TƯƠNG LAI", "📁 TẢI FILE & PHÂN TÍCH LỊCH SỬ"])
 
+# =========================================================================
+# TAB 1: MÔ PHỎNG REALTIME TRONG TƯƠNG LAI
+# =========================================================================
 with tab_future:
     left_col, right_col = st.columns([3.5, 6.5])
     with left_col:
@@ -194,6 +198,10 @@ with tab_future:
                 df_display["Thời gian"] = df_display["Hiển thị Giờ"]
                 st.dataframe(df_display[["STT", "Thời gian", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]], use_container_width=True, hide_index=True, height=200)
 
+
+# =========================================================================
+# 📁 TAB 2: TỰ ĐỘNG PHÂN TÍCH FILE IOT - ĐỒNG BỘ CẤU TRÚC 4 BIỂU ĐỒ CON
+# =========================================================================
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 18px;'>📁 TỰ ĐỘNG PHÂN TÍCH FILE IOT (JSON / CSV / XLSX)</h3>", unsafe_allow_html=True)
     uploaded_file = st.file_uploader("Kéo thả file IoT nhà kính của bạn vào đây:", type=["json", "csv", "xlsx"])
@@ -239,19 +247,30 @@ with tab_past:
             df_processed["Ngày"] = "Dữ liệu File"
             df_processed["Trạng thái"] = df_processed["VPD (kPa)"].apply(lambda x: "⚠️ Quá ẩm" if x < vpd_min else ("✅ Lý tưởng" if x <= vpd_max else "🚨 Quá khô"))
             
-            # ĐÃ XÓA DÒNG THÔNG BÁO XANH LÁ Ở ĐÂY ĐỂ TRÁNH RƯỜM RÀ
             st.write("") 
             
             res_left, res_right = st.columns([6.5, 3.5])
             with res_left:
-                st.markdown("##### 📈 Biểu đồ biến thiên chỉ số VPD trích xuất từ File")
-                st.altair_chart(draw_vpd_chart(df_processed, vpd_min, vpd_max), use_container_width=True)
+                st.markdown("##### 📈 Hệ thống Biểu đồ trích xuất từ File")
+                
+                # ✨ ĐÃ SỬA THÀNH CÔNG: Tách cấu trúc thành 4 tab biểu đồ con riêng biệt giống Tab Future
+                file_sub_tab1, file_sub_tab2, file_sub_tab3, file_sub_tab4 = st.tabs([
+                    "🎯 Chỉ số VPD", "🌡️ Nhiệt độ", "💧 Độ ẩm", "📊 Tổ hợp 3 chỉ số"
+                ])
+                with file_sub_tab1: 
+                    st.altair_chart(draw_vpd_chart(df_processed, vpd_min, vpd_max), use_container_width=True)
+                with file_sub_tab2: 
+                    st.altair_chart(draw_temperature_chart(df_processed), use_container_width=True)
+                with file_sub_tab3: 
+                    st.altair_chart(draw_humidity_chart(df_processed), use_container_width=True)
+                with file_sub_tab4: 
+                    st.altair_chart(draw_combined_chart(df_processed), use_container_width=True)
                 
             with res_right:
                 st.markdown("##### 📋 Nhật ký VPD đã xử lý")
                 st.caption(f"Tổng số mốc dữ liệu đọc được: {len(df_processed)} dòng.")
                 preview_cols = ["Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]
-                st.dataframe(df_processed[preview_cols].head(150), use_container_width=True, hide_index=True, height=180)
+                st.dataframe(df_processed[preview_cols].head(150), use_container_width=True, hide_index=True, height=210)
                 
                 st.download_button(
                     label="📥 Tải xuống kết quả tính toán (.csv)",
