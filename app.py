@@ -9,37 +9,23 @@ from services import send_telegram_message, get_quick_solution
 from analytics import analyze_day_by_blocks_rt, predict_vpd_trend_v3
 from charts import draw_temperature_chart, draw_humidity_chart, draw_vpd_chart, draw_combined_chart
 
-# Cấu hình bảo mật Telegram mặc định cho Tab Realtime
 TELE_TOKEN = "8917951413:AAE6LKUEfYEYiQrFWGoKsQn0tumZc_XbcHg"
 TELE_CHAT_ID = "7290661009"
 
-# BẮT BUỘC: Thiết lập cấu hình layout rộng toàn màn hình
 st.set_page_config(page_title="VPD Farm Analytics", page_icon="🌿", layout="wide")
 
-# Thiết lập giao diện CSS nâng cao: Thu hẹp khoảng cách lề và tạo khung cảnh báo
 st.markdown("""
     <style>
     .block-container { padding-top: 2.5rem; padding-bottom: 0rem; padding-left: 1.5rem; padding-right: 1.5rem; }
     h3 { margin-top: 0.2rem; margin-bottom: 0.8rem; padding-top: 0.2rem; }
     div[st-delegate="element-container"] { margin-bottom: 0.3rem; }
-    
-    /* Làm nổi bật thanh chọn các Tab */
     .stTabs [data-baseweb="tab-list"] { gap: 24px; }
     .stTabs [data-baseweb="tab"] { height: 45px; font-weight: bold; font-size: 16px; }
-    
-    /* Khung cảnh báo sớm phóng to mạnh mẽ khi sắp chạm biên nguy hiểm */
-    .danger-box-red {
-        padding: 12px; background-color: #FFEBEE; border-left: 6px solid #FF1744; 
-        color: #B71C1C; font-weight: bold; font-size: 15px; border-radius: 4px; margin-bottom: 8px;
-    }
-    .danger-box-blue {
-        padding: 12px; background-color: #E3F2FD; border-left: 6px solid #2979FF; 
-        color: #0D47A1; font-weight: bold; font-size: 15px; border-radius: 4px; margin-bottom: 8px;
-    }
+    .danger-box-red { padding: 12px; background-color: #FFEBEE; border-left: 6px solid #FF1744; color: #B71C1C; font-weight: bold; font-size: 15px; border-radius: 4px; margin-bottom: 8px; }
+    .danger-box-blue { padding: 12px; background-color: #E3F2FD; border-left: 6px solid #2979FF; color: #0D47A1; font-weight: bold; font-size: 15px; border-radius: 4px; margin-bottom: 8px; }
     </style>
     """, unsafe_allow_html=True)
 
-# Khởi tạo trạng thái Session State lưu trữ cho hệ thống mô phỏng Realtime
 if 'temp' not in st.session_state: st.session_state.temp = 0.0
 if 'rh' not in st.session_state: st.session_state.rh = 0.0
 if 'countdown' not in st.session_state: st.session_state.countdown = 15 
@@ -63,7 +49,6 @@ def setup_next_day():
 def trigger_new_data(vpd_min, vpd_max):
     current_sim_datetime = datetime.strptime(st.session_state.simulated_time, "%Y-%m-%d %H:%M:%S")
     current_date_str = current_sim_datetime.strftime("Ngày %d/%m")
-    
     st.session_state.temp, st.session_state.rh = get_weather_by_time(current_sim_datetime)
     st.session_state.countdown = 15 
     st.session_state.stt_counter += 1
@@ -101,22 +86,12 @@ def trigger_new_data(vpd_min, vpd_max):
         st.session_state.is_completed = True   
     st.session_state.simulated_time = next_sim_datetime.strftime("%Y-%m-%d %H:%M:%S")
 
-
-# =========================================================================
-# CHIA GIAO DIỆN CHÍNH THÀNH 2 TAB LỚN ĐỘC LẬP
-# =========================================================================
 tab_future, tab_past = st.tabs(["🔮 XEM DỰ BÁO & THEO DÕI TƯƠNG LAI", "📁 TẢI FILE & PHÂN TÍCH LỊCH SỬ"])
 
-# -------------------------------------------------------------------------
-# TAB 1: MÔ PHỎNG REALTIME & CẢNH BÁO SỚM XU HƯỚNG TƯƠNG LAI
-# -------------------------------------------------------------------------
 with tab_future:
     left_col, right_col = st.columns([3.5, 6.5])
-
-    # Cột bên trái: Bảng điều hành vi khí hậu
     with left_col:
         st.markdown("<h3 style='color: #2E7D32; font-size: 18px;'>🤖 TRẠM ĐIỀU HÀNH THÔNG MINH</h3>", unsafe_allow_html=True)
-        
         with st.container(border=True):
             col_btn1, col_btn2 = st.columns(2)
             with col_btn1:
@@ -176,7 +151,6 @@ with tab_future:
                     
                     trend, trend_type = predict_vpd_trend_v3(history_of_latest_day, current_sim_dt.hour, vpd_min, vpd_max)
                     
-                    # Cảnh báo nổ to và mạnh bằng khối màu CSS
                     if trend_type == "danger_red":
                         st.markdown(f"<div class='danger-box-red'>🚨 {trend}</div>", unsafe_allow_html=True)
                     elif trend_type == "danger_blue":
@@ -189,7 +163,6 @@ with tab_future:
 
         left_panel_monitor()
 
-    # Cột bên phải: Biểu đồ trực quan hóa dữ liệu mô phỏng
     with right_col:
         st.markdown("<h3 style='color: #2E7D32; font-size: 18px;'>📊 TRUNG TÂM PHÂN TÍCH CHU KỲ REALTIME</h3>", unsafe_allow_html=True)
         if len(st.session_state.history) == 0:
@@ -221,18 +194,12 @@ with tab_future:
                 df_display["Thời gian"] = df_display["Hiển thị Giờ"]
                 st.dataframe(df_display[["STT", "Thời gian", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]], use_container_width=True, hide_index=True, height=200)
 
-
-# -------------------------------------------------------------------------
-# TAB 2: TỰ ĐỘNG QUÉT FILE JSON/CSV/XLSX - CHỈ LẤY NHIỆT ĐỘ, ĐỘ ẨM & TÍNH VPD
-# -------------------------------------------------------------------------
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 18px;'>📁 TỰ ĐỘNG PHÂN TÍCH FILE IOT (JSON / CSV / XLSX)</h3>", unsafe_allow_html=True)
-    
     uploaded_file = st.file_uploader("Kéo thả file IoT nhà kính của bạn vào đây:", type=["json", "csv", "xlsx"])
     
     if uploaded_file:
         try:
-            # 1. Đọc tệp dữ liệu thô đầu vào
             if uploaded_file.name.endswith('.json'):
                 json_data = json.load(uploaded_file)
                 if isinstance(json_data, dict) and not isinstance(list(json_data.values())[0], (dict, list)):
@@ -244,49 +211,37 @@ with tab_past:
             else:
                 df_upload = pd.read_excel(uploaded_file)
                 
-            # 2. Thuật toán quét và tìm tên cột thông minh (Tự nhận diện từ khóa)
             col_temp, col_rh, col_time = None, None, None
-            
             for col in df_upload.columns:
                 col_lower = str(col).lower().strip()
-                # Quét cột nhiệt độ
                 if any(k in col_lower for k in ['temp', 'nhiet', 't°', 't(°c)', 'temperature', 'value1']):
                     col_temp = col
-                # Quét cột độ ẩm
                 if any(k in col_lower for k in ['rh', 'hum', 'do am', 'humidity', 'h(%)', 'value2']):
                     col_rh = col
-                # Quét cột mốc giờ
-                if any(k in col_lower for k in ['time', 'gio', 'date', 'timestamp', 'mốc', 'created_at']):
+                if any(k in col_lower for k in ['time', 'gio', 'date', 'timestamp', 'mốc', 'created_at', 'stt']):
                     col_time = col
 
-            # Nếu không quét trúng từ khóa, ép lấy theo vị trí 3 cột đầu tiên của file
             if not col_temp and len(df_upload.columns) > 0: col_temp = df_upload.columns[0]
             if not col_rh and len(df_upload.columns) > 1: col_rh = df_upload.columns[1]
             if not col_time and len(df_upload.columns) > 2: col_time = df_upload.columns[2]
 
-            # 3. Tạo bảng sạch và bóc tách dữ liệu
             df_processed = pd.DataFrame()
             df_processed["Nhiệt độ (°C)"] = pd.to_numeric(df_upload[col_temp], errors='coerce')
             df_processed["Độ ẩm (%)"] = pd.to_numeric(df_upload[col_rh], errors='coerce')
             
-            # Đồng bộ định dạng trục thời gian
             try:
                 df_processed["Hiển thị Giờ"] = pd.to_datetime(df_upload[col_time]).dt.strftime('%H:%M')
             except:
                 df_processed["Hiển thị Giờ"] = df_upload[col_time].astype(str)
                 
-            # Loại bỏ các hàng bị rỗng hoặc lỗi cảm biến
             df_processed = df_processed.dropna(subset=["Nhiệt độ (°C)", "Độ ẩm (%)"])
-            
-            # 4. Tính toán VPD hàng loạt bằng core calculations
             df_processed["VPD (kPa)"] = df_processed.apply(lambda row: round(calculate_vpd(row["Nhiệt độ (°C)"], row["Độ ẩm (%)"]), 2), axis=1)
             df_processed["Ngày"] = "Dữ liệu File"
             df_processed["Trạng thái"] = df_processed["VPD (kPa)"].apply(lambda x: "⚠️ Quá ẩm" if x < vpd_min else ("✅ Lý tưởng" if x <= vpd_max else "🚨 Quá khô"))
             
-            st.success(f"✔️ Trích xuất tự động thành công: Nhiệt độ ('{col_temp}'), Độ ẩm ('{col_rh}'), Thời gian ('{col_time}')")
-            st.divider()
+            # ĐÃ XÓA DÒNG THÔNG BÁO XANH LÁ Ở ĐÂY ĐỂ TRÁNH RƯỜM RÀ
+            st.write("") 
             
-            # 5. Phân chia giao diện hiển thị đồ thị gọn gàng
             res_left, res_right = st.columns([6.5, 3.5])
             with res_left:
                 st.markdown("##### 📈 Biểu đồ biến thiên chỉ số VPD trích xuất từ File")
@@ -295,12 +250,9 @@ with tab_past:
             with res_right:
                 st.markdown("##### 📋 Nhật ký VPD đã xử lý")
                 st.caption(f"Tổng số mốc dữ liệu đọc được: {len(df_processed)} dòng.")
-                
-                # Hiển thị bảng số liệu rút gọn
                 preview_cols = ["Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]
                 st.dataframe(df_processed[preview_cols].head(150), use_container_width=True, hide_index=True, height=180)
                 
-                # Xuất file CSV kết quả cho người dùng
                 st.download_button(
                     label="📥 Tải xuống kết quả tính toán (.csv)",
                     data=df_processed.to_csv(index=False).encode('utf-8'),
