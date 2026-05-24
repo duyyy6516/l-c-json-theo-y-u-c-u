@@ -6,7 +6,8 @@ def draw_temperature_chart(df):
         return alt.Chart(pd.DataFrame()).mark_text()
         
     chart = alt.Chart(df).mark_line(color="#FF4B4B", point=True).encode(
-        x=alt.X('Hiển thị Giờ:N', title="Mốc thời gian", sort=None), 
+        # Chuyển đổi sang :T (Temporal) để mở khóa tính năng phóng to, thu nhỏ trục thời gian
+        x=alt.X('datetime_internal:T', title="Mốc thời gian", axis=alt.Axis(format="%H:%M")), 
         y=alt.Y("Nhiệt độ (°C):Q", scale=alt.Scale(zero=False), axis=alt.Axis(title="Nhiệt độ (°C)")),
         tooltip=['Ngày', 'Hiển thị Giờ', "Nhiệt độ (°C)"]
     ).properties(height=260).interactive().configure_axisX(
@@ -23,7 +24,7 @@ def draw_humidity_chart(df):
         return alt.Chart(pd.DataFrame()).mark_text()
         
     chart = alt.Chart(df).mark_line(color="#0068C9", point=True).encode(
-        x=alt.X('Hiển thị Giờ:N', title="Mốc thời gian", sort=None),
+        x=alt.X('datetime_internal:T', title="Mốc thời gian", axis=alt.Axis(format="%H:%M")),
         y=alt.Y("Độ ẩm (%):Q", scale=alt.Scale(zero=False), axis=alt.Axis(title="Độ ẩm (%)")),
         tooltip=['Ngày', 'Hiển thị Giờ', "Độ ẩm (%)"]
     ).properties(height=260).interactive().configure_axisX(
@@ -46,28 +47,28 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
         
     Y_LIMIT = max(actual_max_vpd + 0.3, 2.0)
     
-    # Khối nền màu xanh biểu thị khu vực Quá ẩm
+    # Khối nền màu xanh (Quá ẩm)
     rect_blue = alt.Chart(df).mark_rect(color='#0068C9', opacity=0.15).encode(
         y=alt.Y(datum=0.0),
         y2=alt.Y2(datum=vpd_min)
     )
     
-    # Khối nền màu đỏ biểu thị khu vực Quá khô
+    # Khối nền màu đỏ (Quá khô)
     rect_red = alt.Chart(df).mark_rect(color='#FF4B4B', opacity=0.15).encode(
         y=alt.Y(datum=vpd_max),
         y2=alt.Y2(datum=Y_LIMIT)
     )
     
-    # Đường đồ thị chính mượt mà màu xanh lá cây đậm
+    # Đường đồ thị chính màu xanh lá cây đậm (Sử dụng datetime_internal:T)
     line_vpd = alt.Chart(df).mark_line(color="#2E7D32", size=2.5, point=len(df) < 100).encode(
-        x=alt.X('Hiển thị Giờ:N', title="Mốc thời gian", sort=None),
+        x=alt.X('datetime_internal:T', title="Mốc thời gian", axis=alt.Axis(format="%H:%M")),
         y=alt.Y('VPD (kPa):Q', 
                scale=alt.Scale(domain=[0.0, Y_LIMIT], clamp=True), 
                axis=alt.Axis(title="Chỉ số VPD (kPa)", grid=True)),
         tooltip=['Ngày', 'Hiển thị Giờ', 'VPD (kPa)', 'Trạng thái']
     )
     
-    # ĐÃ SỬA: Đưa thuộc tính .interactive() ra ngoài lớp gộp chung để cho phép cuộn phóng to/thu nhỏ bằng chuột
+    # Gộp các lớp dữ liệu và kích hoạt tương tác thu phóng ra bên ngoài
     chart = (rect_blue + rect_red + line_vpd).properties(
         height=260
     ).interactive().configure_axisX(  
@@ -85,7 +86,7 @@ def draw_combined_chart(df):
         return alt.Chart(pd.DataFrame()).mark_text()
 
     base = alt.Chart(df).encode(
-        x=alt.X('Hiển thị Giờ:N', title="Mốc thời gian", sort=None)
+        x=alt.X('datetime_internal:T', title="Mốc thời gian", axis=alt.Axis(format="%H:%M"))
     )
     
     line_t = base.mark_line(color='#FF4B4B', strokeDash=[3,3]).encode(
