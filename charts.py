@@ -1,57 +1,19 @@
 import altair as alt
 
-def draw_temperature_chart(df):
-    return alt.Chart(df).mark_line(color="#FF4B4B", point=True).encode(
-        x=alt.X('Hiển thị Giờ:O', axis=alt.Axis(title="Mốc thời gian", labelAngle=-45, tickCount=24)), 
-        y=alt.Y("Nhiệt độ (°C):Q", scale=alt.Scale(zero=False), axis=alt.Axis(title="Nhiệt độ (°C)")),
-        tooltip=['Ngày', 'Hiển thị Giờ', "Nhiệt độ (°C)"]
-    ).properties(height=200).interactive()
-
-def draw_humidity_chart(df):
-    return alt.Chart(df).mark_line(color="#0068C9", point=True).encode(
-        x=alt.X('Hiển thị Giờ:O', axis=alt.Axis(title="Mốc thời gian", labelAngle=-45, tickCount=24)),
-        y=alt.Y("Độ ẩm (%):Q", scale=alt.Scale(zero=False), axis=alt.Axis(title="Độ ẩm (%)")),
-        tooltip=['Ngày', 'Hiển thị Giờ', "Độ ẩm (%)"]
-    ).properties(height=200).interactive()
-
 def draw_vpd_chart(df, vpd_min, vpd_max):
-    # GIẢI PHÁP: Tự động lấy max giá trị thực tế của file để tạo đỉnh trục Y không bị lỗi lấn khung
-    max_val = float(df['VPD (kPa)'].max()) if len(df) > 0 else 2.2
-    Y_LIMIT = max(max_val + 0.5, 2.2) 
+    # ... (giữ nguyên phần logic tạo biểu đồ `chart` hiện tại của bạn) ...
     
-    rect_blue = alt.Chart(df).mark_rect(color='#0068C9', opacity=0.12).encode(
-        y=alt.Y(datum=0.0),
-        y2=alt.Y2(datum=vpd_min)
-    )
-    rect_red = alt.Chart(df).mark_rect(color='#FF4B4B', opacity=0.12).encode(
-        y=alt.Y(datum=vpd_max),
-        y2=alt.Y2(datum=Y_LIMIT)
+    # Bổ sung cấu hình dưới đây vào trước khi return để làm thoáng biểu đồ:
+    styled_chart = chart.properties(
+        height=320 # Tăng độ cao một chút cho thoáng
+    ).configure_axisX(
+        labelAngle=-45,      # Xoay nghiêng nhãn ngày/giờ 45 độ để không bị đè chữ
+        labelOverlap="hide",  # Tự động ẩn bớt nhãn nếu dữ liệu quá dày để tránh chồng chéo
+        labelPadding=10       # Tạo khoảng cách giữa chữ và trục tọa độ
+    ).configure_axisY(
+        labelPadding=10
+    ).configure_view(
+        strokeOpacity=0       # Ẩn khung viền thô cứng để biểu đồ mở rộng tự nhiên
     )
     
-    # Đã sửa: dùng scale=alt.Scale(zero=False) để tự co giãn bùng nổ theo biên độ dao động thực tế
-    line_vpd = alt.Chart(df).mark_line(color="#2E7D32", size=2.5, point=len(df) < 100).encode(
-        x=alt.X('Hiển thị Giờ:O', axis=alt.Axis(title="Mốc thời gian", labelAngle=-45, tickCount=24)),
-        y=alt.Y('VPD (kPa):Q', 
-               scale=alt.Scale(zero=False, domain=[0.0, Y_LIMIT]), 
-               axis=alt.Axis(title="Chỉ số VPD (kPa)", grid=True)),
-        tooltip=['Ngày', 'Hiển thị Giờ', 'VPD (kPa)', 'Trạng thái']
-    ).interactive() 
-    
-    return (rect_blue + rect_red + line_vpd).properties(height=210)
-
-def draw_combined_chart(df):
-    base = alt.Chart(df).encode(x=alt.X('Hiển thị Giờ:O', axis=alt.Axis(title="Mốc thời gian", labelAngle=-45, tickCount=24)))
-    line_t = base.mark_line(color='#FF4B4B', strokeDash=[3,3]).encode(
-        y=alt.Y("Nhiệt độ (°C):Q", axis=alt.Axis(title="Nhiệt độ / Độ ẩm", titleColor='#0068C9')),
-        tooltip=['Hiển thị Giờ', "Nhiệt độ (°C)"]
-    )
-    line_r = base.mark_line(color='#0068C9').encode(
-        y=alt.Y("Độ ẩm (%):Q"),
-        tooltip=['Hiển thị Giờ', "Độ ẩm (%)"]
-    )
-    weather_layer = alt.layer(line_t, line_r)
-    line_v = base.mark_line(color="#2E7D32", size=3).encode(
-        y=alt.Y('VPD (kPa):Q', axis=alt.Axis(title="Áp suất VPD (kPa)", titleColor='#2E7D32'), scale=alt.Scale(zero=False)),
-        tooltip=['Hiển thị Giờ', 'VPD (kPa)', 'Trạng thái']
-    )
-    return alt.layer(weather_layer, line_v).properties(height=200).resolve_scale(y='independent').interactive()
+    return styled_chart
