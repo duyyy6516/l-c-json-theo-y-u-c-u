@@ -199,7 +199,7 @@ with tab_future:
 
 
 # =========================================================================
-# 📁 TAB 2: TỰ ĐỘNG PHÂN TÍCH FILE IOT (ĐÃ SỬA LỖI 10T THÀNH 10min CHO PANDAS)
+# 📁 TAB 2: TỰ ĐỘNG PHÂN TÍCH FILE IOT (ĐÃ FIX LỖI OBJECT MEAN)
 # =========================================================================
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 18px;'>📁 TỰ ĐỘNG PHÂN TÍCH FILE IOT (JSON / CSV / XLSX)</h3>", unsafe_allow_html=True)
@@ -256,8 +256,12 @@ with tab_past:
 
             df_raw_calc = pd.DataFrame()
             df_raw_calc["datetime_internal"] = raw_datetimes
+            
+            # ✨ GIẢI PHÁP SỬA LỖI: Ép kiểu dữ liệu về Numeric dạng Float, loại bỏ chữ lỗi (errors='coerce')
             df_raw_calc["Nhiệt độ (°C)"] = pd.to_numeric(df_upload[col_temp], errors='coerce')
             df_raw_calc["Độ ẩm (%)"] = pd.to_numeric(df_upload[col_rh], errors='coerce')
+            
+            # Xóa các dòng trống hoặc dòng chứa chuỗi text bị lỗi chuyển đổi số
             df_raw_calc = df_raw_calc.dropna(subset=["Nhiệt độ (°C)", "Độ ẩm (%)"]).sort_values("datetime_internal")
 
             # Xử lý cắt mốc thời gian và gán lịch chọn ngày tùy chọn
@@ -285,22 +289,24 @@ with tab_past:
                     elif "1 Quý gần nhất" in time_filter_option:
                         df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= (max_time_in_file - timedelta(days=90))]
 
-            # 🛠️ THUẬT TOÁN GOM NHÓM ĐÃ FIX LỖI: Sử dụng "10min" và "1h" thay cho chữ "T" bị loại bỏ ở bản Pandas mới
+            # 🛠️ THUẬT TOÁN GOM NHÓM: Đã lọc sạch Object chỉ giữ lại các cột dữ liệu float64 dạng số chuẩn
             if len(df_raw_calc) > 0:
-                df_raw_calc.set_index("datetime_internal", inplace=True)
+                # Chỉ lấy đúng 2 cột số để đem đi tính trung bình cộng tránh lỗi dính cột text khác
+                df_resample_input = df_raw_calc[["datetime_internal", "Nhiệt độ (°C)", "Độ ẩm (%)"]].copy()
+                df_resample_input.set_index("datetime_internal", inplace=True)
                 
                 if "1 Tuần gần nhất" in time_filter_option or "1 Tháng gần nhất" in time_filter_option:
-                    df_resampled = df_raw_calc.resample("1h").mean().dropna()
+                    df_resampled = df_resample_input.resample("1h").mean().dropna()
                     df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%d/%m %H:00")
                 elif "1 Quý gần nhất" in time_filter_option:
-                    df_resampled = df_raw_calc.resample("1d").mean().dropna()
+                    df_resampled = df_resample_input.resample("1d").mean().dropna()
                     df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%d/%m")
                 elif "Xem toàn bộ" in time_filter_option:
-                    df_resampled = df_raw_calc.copy()
+                    df_resampled = df_resample_input.copy()
                     df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%d/%m %H:%M:%S")
                 else:
-                    # ✨ ĐÃ SỬA LỖI TẠI ĐÂY: Sử dụng "10min" (Chuẩn mới) thay cho "10T" cũ
-                    df_resampled = df_raw_calc.resample("10min").mean().dropna()
+                    # Áp dụng gom trung bình nhóm 10 phút cho "1 Ngày gần nhất" và "Tự chọn lịch ngày"
+                    df_resampled = df_resample_input.resample("10min").mean().dropna()
                     df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%H:%M")
                 
                 df_resampled.reset_index(inplace=True)
