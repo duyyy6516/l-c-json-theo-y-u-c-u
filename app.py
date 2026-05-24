@@ -79,7 +79,7 @@ def trigger_new_data(vpd_min, vpd_max):
         
         prefix = "🚨 [CẢNH BÁO SỚM] " if "CẢNH BÁO SỚM" in trend else ""
         telegram_msg = (
-            f"🌿 *HỆ THỐNG VPD ĐÀ LẠT REALTIME*\n⏰ {current_date_str} - {current_sim_datetime.strftime('%H:%M')}\n"
+            f"🌿 *Chuyên Gia Nông Nghiệp Công Nghệ Cao*\n⏰ {current_date_str} - {current_sim_datetime.strftime('%H:%M')}\n"
             f"📊 Môi trường: {st.session_state.temp}°C | {st.session_state.rh}%\n\n"
             f"*1️⃣ Hiện trạng:* *{new_vpd:.2f} kPa* — {tele_status}\n"
             f"*2️⃣ Biện pháp pháp:* _{sol}_\n"
