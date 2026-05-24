@@ -69,6 +69,7 @@ def trigger_new_data(vpd_min, vpd_max):
     st.session_state.history.insert(0, {
         "STT": st.session_state.stt_counter, "Ngày": current_date_str,
         "Thời gian mô phỏng": current_sim_datetime, "Hiển thị Giờ": current_sim_datetime.strftime("%H:%M"),
+        "datetime_internal": current_sim_datetime,
         "Nhiệt độ (°C)": st.session_state.temp, "Độ ẩm (%)": st.session_state.rh,
         "VPD (kPa)": round(new_vpd, 2), "Trạng thái": status_text
     })
@@ -151,7 +152,7 @@ with tab_future:
 
             vpd_result = calculate_vpd(st.session_state.temp, st.session_state.rh)
             with st.container(border=True):
-                st.markdown("<p style='color:#2E7D32; font-weight:bold; margin-bottom:2px;'>🎯 TRUNG TÂM ĐIỀU HÀNH LỆNH</p>", unsafe_allow_html=True)
+                st.markdown("<p style='color:#2E7D32; font-weight:bold; margin-bottom:2px;'>🎯 TRUNG TÂM ĐIỀU HÀNH LỆWIN</p>", unsafe_allow_html=True)
                 if st.session_state.stt_counter == 0:
                     st.info("Đang chờ kích hoạt trạm...")
                 else:
@@ -325,25 +326,27 @@ with tab_past:
 
             df_for_block_analysis = df_raw_calc.copy()
 
+            # 🛠️ ĐÃ SỬA: Giữ lại cột datetime_internal làm dữ liệu thực sau khi resample bằng pandas
             if len(df_raw_calc) > 0:
                 df_resample_input = df_raw_calc[["datetime_internal", "Nhiệt độ (°C)", "Độ ẩm (%)"]].copy()
                 df_resample_input.set_index("datetime_internal", inplace=True)
                 
                 if any(k in time_filter_option for k in ["1 Tuần gần nhất", "1 Tháng gần nhất", "1 Quý gần nhất"]):
                     df_resampled = df_resample_input.resample("1d").mean().dropna()
-                    df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%d/%m")
                 elif "Xem toàn bộ" in time_filter_option:
                     df_resampled = df_resample_input.copy()
-                    df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%d/%m %H:%M:%S")
                 else:
                     df_resampled = df_resample_input.resample("10min").mean().dropna()
-                    df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%H:%M")
                 
-                df_resampled.reset_index(inplace=True)
+                # Đưa cột Index thời gian quay trở lại làm cột dữ liệu thông thường để Charts.py nhận được dữ liệu vẽ đồ thị
+                df_resampled["datetime_internal"] = df_resampled.index
+                df_resampled["Hiển thị Giờ"] = df_resampled["datetime_internal"].dt.strftime("%H:%M")
+                df_resampled.reset_index(drop=True, inplace=True)
             else:
-                df_resampled = pd.DataFrame(columns=["Nhiệt độ (°C)", "Độ ẩm (%)", "Hiển thị Giờ"])
+                df_resampled = pd.DataFrame(columns=["datetime_internal", "Nhiệt độ (°C)", "Độ ẩm (%)", "Hiển thị Giờ"])
 
             df_processed = pd.DataFrame()
+            df_processed["datetime_internal"] = df_resampled["datetime_internal"]
             df_processed["Nhiệt độ (°C)"] = df_resampled["Nhiệt độ (°C)"].round(2)
             df_processed["Độ ẩm (%)"] = df_resampled["Độ ẩm (%)"].round(2)
             df_processed["Hiển thị Giờ"] = df_resampled["Hiển thị Giờ"]
@@ -426,13 +429,9 @@ with tab_past:
                 df_block_report = pd.DataFrame(block_report_rows)
                 st.dataframe(df_block_report, use_container_width=True, hide_index=True)
                 
-                # --------------------------------------------------------
-                # MỚI THÊM: NÚT GỬI BÁO CÁO FILE LÊN TELEGRAM
-                # --------------------------------------------------------
                 st.write("")
                 if st.button("📤 Gửi báo cáo phân tích file qua Telegram", type="primary", key="btn_send_file_tele"):
                     if TELE_TOKEN and TELE_CHAT_ID:
-                        # Ghép chuỗi văn bản báo cáo từ dataframe báo cáo theo buổi
                         file_tele_msg = f"📂 *BÁO CÁO PHÂN TÍCH TỪ FILE IoT THÀNH CÔNG*\n"
                         file_tele_msg += f"📦 Tên file: `{uploaded_file.name}`\n"
                         file_tele_msg += f"🎯 Mô hình áp dụng: *{file_plant_option}* ({file_vpd_min}-{file_vpd_max} kPa)\n"
@@ -440,9 +439,7 @@ with tab_past:
                         file_tele_msg += f"━━━━━━━━━━━━━━━━━━━━\n\n"
                         
                         for _, r_data in df_block_report.iterrows():
-                            # Chuyển icon dựa trên kết quả đánh giá để Telegram sinh động dễ đọc
                             icon_status = "🟩" if "LÝ TƯỞNG" in r_data["Đánh giá"] else ("🟦" if "Quá ẩm" in r_data["Đánh giá"] else "🟥")
-                            
                             file_tele_msg += f"{icon_status} *{r_data['Khoảng Buổi']}*\n"
                             file_tele_msg += f"▪️ Môi trường: {r_data['Nhiệt độ TB']} | {r_data['Độ ẩm TB']}\n"
                             file_tele_msg += f"▪️ VPD TB: *{r_data['VPD Trung Bình']}*\n"
@@ -451,16 +448,11 @@ with tab_past:
                             file_tele_msg += f"────────────────────\n"
                             
                         file_tele_msg += f"\n📊 _Hệ thống phân tích tự động thông minh VPD Farm_"
-                        
-                        # Gọi service gửi tin nhắn
                         success = send_telegram_message(TELE_TOKEN, TELE_CHAT_ID, file_tele_msg)
-                        if success:
-                            st.success("✅ Đã gửi toàn bộ dữ liệu báo cáo file qua Telegram thành công!")
-                        else:
-                            st.error("❌ Không thể gửi tin nhắn. Vui lòng kiểm tra lại cấu hình kết nối mạng.")
+                        if success: st.success("✅ Đã gửi toàn bộ dữ liệu báo cáo file qua Telegram thành công!")
+                        else: st.error("❌ Không thể gửi tin nhắn. Vui lòng kiểm tra lại cấu hình kết nối mạng.")
                     else:
                         st.warning("⚠️ Hệ thống chưa cấu hình TELE_TOKEN hoặc TELE_CHAT_ID.")
-                        
             else:
                 st.info("Chưa có đủ mốc thời gian thích hợp để phân tích chu kỳ buổi.")
 
