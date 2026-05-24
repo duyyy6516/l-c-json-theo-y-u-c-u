@@ -199,7 +199,7 @@ with tab_future:
 
 
 # =========================================================================
-# 📁 TAB 2: TỰ ĐỘNG PHÂN TÍCH FILE IOT (NÂNG CẤP CHỌN LỊCH & TRUNG BÌNH 10 PHÚT)
+# 📁 TAB 2: TỰ ĐỘNG PHÂN TÍCH FILE IOT (ĐÃ SỬA LỖI 10T THÀNH 10min CHO PANDAS)
 # =========================================================================
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 18px;'>📁 TỰ ĐỘNG PHÂN TÍCH FILE IOT (JSON / CSV / XLSX)</h3>", unsafe_allow_html=True)
@@ -260,7 +260,7 @@ with tab_past:
             df_raw_calc["Độ ẩm (%)"] = pd.to_numeric(df_upload[col_rh], errors='coerce')
             df_raw_calc = df_raw_calc.dropna(subset=["Nhiệt độ (°C)", "Độ ẩm (%)"]).sort_values("datetime_internal")
 
-            # ✨ THẢ THANH CHỌN LỊCH NGÀY TÙY Ý NẾU ĐƯỢC CHỌN
+            # Xử lý cắt mốc thời gian và gán lịch chọn ngày tùy chọn
             if len(df_raw_calc) > 0:
                 df_raw_calc["only_date"] = df_raw_calc["datetime_internal"].dt.date
                 available_dates = sorted(df_raw_calc["only_date"].unique())
@@ -269,14 +269,12 @@ with tab_past:
                     st.write("")
                     selected_date = st.date_input(
                         "👇 Hãy chọn ngày bạn muốn trích xuất dữ liệu:",
-                        value=available_dates[-1], # Mặc định lấy ngày cuối cùng trong file
-                        min_value=available_dates[0],
-                        max_value=available_dates[-1]
+                        value=available_dates[-1] if available_dates else datetime.now().date(),
+                        min_value=available_dates[0] if available_dates else None,
+                        max_value=available_dates[-1] if available_dates else None
                     )
-                    # Tiến hành lọc chính xác ngày người dùng bấm chọn
                     df_raw_calc = df_raw_calc[df_raw_calc["only_date"] == selected_date]
                 else:
-                    # Logic cắt mốc lùi thời gian cho các lựa chọn khác
                     max_time_in_file = df_raw_calc["datetime_internal"].max()
                     if "1 Ngày gần nhất" in time_filter_option:
                         df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= (max_time_in_file - timedelta(days=1))]
@@ -287,7 +285,7 @@ with tab_past:
                     elif "1 Quý gần nhất" in time_filter_option:
                         df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= (max_time_in_file - timedelta(days=90))]
 
-            # 🛠️ THUẬT TOÁN GOM NHÓM ĐỒNG BỘ - TÍNH TRUNG BÌNH 10 PHÚT
+            # 🛠️ THUẬT TOÁN GOM NHÓM ĐÃ FIX LỖI: Sử dụng "10min" và "1h" thay cho chữ "T" bị loại bỏ ở bản Pandas mới
             if len(df_raw_calc) > 0:
                 df_raw_calc.set_index("datetime_internal", inplace=True)
                 
@@ -301,8 +299,8 @@ with tab_past:
                     df_resampled = df_raw_calc.copy()
                     df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%d/%m %H:%M:%S")
                 else:
-                    # ✨ ĐÃ SỬA: Gom nhóm trung bình 10 phút áp dụng cho "1 Ngày gần nhất" và "Tự chọn lịch ngày"
-                    df_resampled = df_raw_calc.resample("10T").mean().dropna()
+                    # ✨ ĐÃ SỬA LỖI TẠI ĐÂY: Sử dụng "10min" (Chuẩn mới) thay cho "10T" cũ
+                    df_resampled = df_raw_calc.resample("10min").mean().dropna()
                     df_resampled["Hiển thị Giờ"] = df_resampled.index.strftime("%H:%M")
                 
                 df_resampled.reset_index(inplace=True)
