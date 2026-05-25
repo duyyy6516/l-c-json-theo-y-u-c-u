@@ -62,7 +62,6 @@ if 'current_matrix' not in st.session_state:
     st.session_state.current_matrix = PLANT_PRESETS["🍓 Dâu tây Đà Lạt (Giai đoạn trái)"].copy()
 
 def style_status_rows(row):
-    """Nhuộm màu bảng nhật ký theo 5 phân vùng sinh học mới"""
     styles = [''] * len(row)
     status = str(row['Trạng thái'])
     loc = row.index.get_loc('Trạng thái')
@@ -84,7 +83,6 @@ def trigger_new_data(plant_matrix):
     buoi_hien_tai = get_biological_block(current_sim_datetime.hour)
     v_min, v_max = plant_matrix[buoi_hien_tai]
     
-    # Chia 5 khoảng phân định trạng thái
     if new_vpd >= v_max + 0.5: status_text = "🔴 Quá Nóng"
     elif new_vpd > v_max: status_text = "🟠 Nóng"
     elif new_vpd < v_min - 0.2: status_text = "💙 Quá Ẩm"
@@ -119,9 +117,6 @@ if st.session_state.stt_counter == 0:
 
 tab_future, tab_past = st.tabs(["🔮 MÔ PHỎNG & XEM REALTIME", "📁 QUÉT FILE IOT HỆ THỐNG"])
 
-# --------------------------------------------------------
-# TAB 1: MÔ PHỎNG SỐ LIỆU REALTIME
-# --------------------------------------------------------
 with tab_future:
     left_col, right_col = st.columns([4, 6])
     with left_col:
@@ -219,9 +214,6 @@ with tab_future:
             with m_tab2:
                 st.dataframe(df_f[["STT", "Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]].style.apply(style_status_rows, axis=1), use_container_width=True, hide_index=True)
 
-# --------------------------------------------------------
-# TAB 2: TẢI FILE NHẬT KÝ & KHỚP MA TRẬN ĐỘNG
-# --------------------------------------------------------
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 18px;'>📁 TẢI FILE NHẬT KÝ IOT TRẠM CẢM BIẾN</h3>", unsafe_allow_html=True)
     f_left, f_right = st.columns([4, 6])
@@ -351,7 +343,6 @@ with tab_past:
             df_processed["Hiển thị Giờ"] = df_resampled["Hiển thị Giờ"]
             df_processed["Ngày"] = "Dữ liệu File"
             
-            # Khớp 5 trạng thái thông minh cho dữ liệu File log trạm
             file_status_list = []
             for _, r in df_processed.iterrows():
                 b_name = get_biological_block(r["datetime_internal"].hour)
@@ -404,7 +395,7 @@ with tab_past:
                 st.dataframe(df_processed[preview_cols].style.apply(style_status_rows, axis=1), use_container_width=True, hide_index=True, height=270)
 
             st.markdown("---")
-            st.markdown(f"##### 📊 BÁO CÁO PHÂN TÍCH TỔNG HỢP THEO BUỔI CHU KỲ (Dữ liệu gốc từ File)")
+            st.markdown("##### 📊 BÁO CÁO PHÂN TÍCH TỔNG HỢP THEO BUỔI CHU KỲ (Dữ liệu gốc từ File)")
             if len(df_for_block_analysis) > 0:
                 df_block_report = analyze_day_by_blocks_rt(df_for_block_analysis.assign(Ngày="Dữ liệu File"), file_matrix, "Dữ liệu File")
                 st.dataframe(df_block_report, use_container_width=True, hide_index=True)
@@ -413,7 +404,7 @@ with tab_past:
                     if TELE_TOKEN and TELE_CHAT_ID:
                         file_tele_msg = f"📂 *BÁO CÁO CHU KỲ FILE - 5 PHÂN VÙNG*\n📦 File: `{uploaded_file.name}`\n🎯 Mô hình: *{f_preset_choice}*\n━━━━━━━━━━━━━━━━━━━━\n\n"
                         for _, r_data in df_block_report.iterrows():
-                            file_tele_msg += f" Buổi *{r_data['Khoảng Buổi']}*\n▪️ Môi trường: {r_data['Nhiệt độ TB']} | {r_data['Độ ẩm TB']}\n▪️ VPD TB: *{r_data['VPD Trung Bình']}*\n▪️ Đánh giá: *{r_data['Đánh giá sinh học']_}\n▪️ Giải pháp: {r_data['Giải pháp kỹ thuật']}\n────────────────────\n"
+                            file_tele_msg += f"Buổi *{r_data['Khoảng Buổi']}*\n▪️ Môi trường: {r_data['Nhiệt độ TB']} | {r_data['Độ ẩm TB']}\n▪️ VPD TB: *{r_data['VPD Trung Bình']}*\n▪️ Đánh giá: *{r_data['Đánh giá sinh học']}*\n▪️ Giải pháp: {r_data['Giải pháp kỹ thuật']}\n────────────────────\n"
                         file_tele_msg += f"\n📊 _Hệ thống tự động chấm điểm sinh học VPD Smart Farm_"
                         success = send_telegram_message(TELE_TOKEN, TELE_CHAT_ID, file_tele_msg)
                         if success: st.success("✅ Đã gửi toàn bộ dữ liệu báo cáo qua Telegram thành công!")
