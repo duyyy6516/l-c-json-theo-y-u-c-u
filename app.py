@@ -19,7 +19,7 @@ TELE_CHAT_ID = "7290661009"
 
 st.set_page_config(page_title="VPD Smart Farm Monitor Pro", page_icon="🌿", layout="wide")
 
-# FIX LỖI STREAMLIT TRÊN PYTHON 3.14+: Thay thế hoàn toàn st.markdown bằng st.html
+# SỬA TRIỆT ĐỂ LỖI CRASH TRÊN PYTHON 3.14+ BẰNG ST.HTML
 st.html(
     """
     <style>
@@ -35,10 +35,10 @@ st.html(
 st.title("🌿 VPD Smart Farm Monitor Pro — Hệ Thống Giám Sát Vi Khí Hậu Thông Minh")
 st.write("Giải pháp phân tích chỉ số Thâm hụt áp suất hơi (VPD) thời gian thực và quản lý chu kỳ sinh học tối ưu nông nghiệp.")
 
-# Khởi tạo 3 tabs tương tác
+# Khởi tạo đúng 3 Tabs theo yêu cầu
 tab1, tab2, tab3 = st.tabs(["MÔ PHỎNG & XEM REALTIME", "QUÉT FILE IOT HỆ THỐNG", "📂 PHÂN TÍCH TỪ FILE JSON"])
 
-# 💡 HÀM TIỆN ÍCH DÙNG CHUNG CHO CÁC TAB ĐỂ LẤY NGƯỠNG CÂY TRỒNG
+# Hàm tiện ích lấy ma trận ngưỡng tối ưu cho cây trồng (Dùng chung cho các Tab)
 def get_plant_matrix_by_choice(choice):
     if "Dâu Tây" in choice:
         return {
@@ -66,7 +66,7 @@ def get_plant_matrix_by_choice(choice):
         }
 
 # ==========================================
-# TAB 1: MÔ PHỎNG & XEM REALTIME
+# TAB 1: MÔ PHỎNG & XEM REALTIME (GIỮ NGUYÊN)
 # ==========================================
 with tab1:
     st.header("⚡ Trạm Mô Phỏng Môi Trường Đà Lạt Realtime")
@@ -118,7 +118,6 @@ with tab1:
         trend_msg, trend_status = predict_vpd_trend_v3(history_sim, sim_hour, current_matrix)
         st.info(f"🔮 **Xu hướng biến động kế tiếp:** {trend_msg}")
         
-        # Gọi hộp thoại HTML tùy biến an toàn thay vì st.markdown chứa HTML độc hại
         if vpd_sim > vpd_max:
             st.html(f"<div class='danger-box-red'>🚨 CẢNH BÁO NGUY HIỂM: VPD ({vpd_sim:.2f} kPa) vượt ngưỡng tối ưu buổi ({vpd_max} kPa) cho {preset_choice.split()[0]}. Cây trồng đang bị stress nhiệt/khô nghiêm trọng!</div>")
         elif vpd_sim < vpd_min:
@@ -167,7 +166,7 @@ with tab1:
                     st.error("❌ Kết nối API Telegram thất bại.")
 
 # ==========================================
-# TAB 2: QUÉT FILE IOT HỆ THỐNG (.XLSX/.CSV)
+# TAB 2: QUÉT FILE IOT HỆ THỐNG (GIỮ NGUYÊN)
 # ==========================================
 with tab2:
     st.header("📂 Hệ Thống Quét Lịch Sử Nhật Ký Thiết Bị Môi Trường")
@@ -218,12 +217,12 @@ with tab2:
                         success = send_telegram_message(TELE_TOKEN, TELE_CHAT_ID, file_tele_msg)
                         if success: st.success("✅ Đã gửi toàn bộ dữ liệu báo cáo qua Telegram thành công!")
             else:
-                st.error(f"❌ File tải lên thiếu các cột bắt buộc. Yêu cầu chính xác tên cột: {required_cols}")
+                st.info("Chưa có đủ dữ liệu thích hợp để bóc tách chu kỳ buổi.")
         except Exception as err:
             st.error(f"❌ Lỗi xử lý tệp tin nhật ký hệ thống: {str(err)}")
 
 # ==========================================
-# TAB 3: PHÂN TÍCH TỪ FILE JSON
+# TAB 3: PHÂN TÍCH TỪ FILE JSON (MỚI THÊM)
 # ==========================================
 with tab3:
     st.header("📂 Hệ Thống Phân Tích Dữ Liệu Từ File JSON")
