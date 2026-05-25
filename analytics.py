@@ -47,7 +47,7 @@ def predict_vpd_trend_dynamic(history_data, current_hour, plant_matrix):
         elif slope < -0.04: return "📉 Xu hướng: Chỉ số VPD đang sụt giảm nhanh (Ẩm lên).", "normal"
         else: return "🔄 Xu hướng: Biến động biên độ nhỏ, nằm trong tầm kiểm soát sinh học.", "normal"
     except:
-        return f"🔄 Chỉ số xu hướng đang được chuẩn hóa toán học...", "normal"
+        return "🔄 Chỉ số xu hướng đang được chuẩn hóa toán học...", "normal"
 
 def calculate_dynamic_plant_stress(df_data, plant_matrix, mode_filter):
     """
@@ -136,3 +136,8 @@ def analyze_day_by_blocks_dynamic(history_list, plant_matrix, target_day_str):
             "VPD Trung Bình": f"{avg_v} kPa", "Đánh giá sinh học": status, "Giải pháp kỹ thuật": sol
         })
     return pd.DataFrame(report_data)
+
+# --- BACKWARD COMPATIBILITY ALIASES (Ánh xạ các hàm cũ tránh lỗi Import hệ thống chính) ---
+analyze_day_by_blocks_rt = analyze_day_by_blocks_dynamic
+predict_vpd_trend_v3 = predict_vpd_trend_dynamic
+calculate_plant_stress_hours = calculate_dynamic_plant_stress
