@@ -156,7 +156,7 @@ with tab_future:
     with right_col:
         st.markdown("<h3 style='color: #2E7D32; font-size: 18px;'>📊 TRUNG TÂM PHÂN TÍCH MA TRẬN CHU KỲ</h3>", unsafe_allow_html=True)
         if not st.session_state.history:
-            st.info("Chưa có số liệu. Vui lòng bấm nút '⏭️ Cập nhật điểm kế tiếp' để ghi nhật ký.")
+            st.info("Chưa có số liệu. Vui lòng bấm nút '⏭️ Cập nhật điểm kế tiếp' để bắt đầu ghi nhật ký.")
         else:
             u_days = sorted(list(set([r["Ngày"] for r in st.session_state.history])), reverse=True)
             f1, f2 = st.columns([7, 3])
@@ -177,7 +177,7 @@ with tab_future:
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
 # --------------------------------------------------------
-# TAB 2: QUAY LẠI DÙNG 1 DẢI CỐ ĐỊNH DUY NHẤT CẢ NGÀY (RÚT GỌN)
+# TAB 2: CHỈ SỬ DỤNG 1 DẢI CỐ ĐỊNH CHUNG CẢ NGÀY + KHỬ LỖI .DT
 # --------------------------------------------------------
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 19px;'>📁 PHÂN TÍCH FILE IOT THEO DẢI CỐ ĐỊNH</h3>", unsafe_allow_html=True)
@@ -185,7 +185,6 @@ with tab_past:
     with tl:
         with st.container(border=True):
             st.markdown("**⚙️ Chỉ cần cấu hình 1 dải VPD mục tiêu chung cho cả file (kPa):**")
-            # Trả lại dải đơn giản cho Tab 2
             f_vpd_range = st.slider("Dải lý tưởng cố định:", 0.0, 3.0, (0.6, 1.2), step=0.1, key="file_static_range")
     with tr:
         with st.container(border=True):
@@ -197,54 +196,64 @@ with tab_past:
             if uploaded_file.name.endswith('.json'):
                 js = json.load(uploaded_file)
                 df_up = pd.DataFrame([js]) if isinstance(js, dict) and not isinstance(list(js.values())[0], (dict, list)) else pd.DataFrame(js)
-            elif uploaded_file.name.endswith('.csv'): df_up = pd.read_csv(uploaded_file)
-            else: df_up = pd.read_excel(uploaded_file)
+            elif uploaded_file.name.endswith('.csv'): 
+                df_up = pd.read_csv(uploaded_file)
+            else: 
+                df_up = pd.read_excel(uploaded_file)
             
             c_t, c_h, c_time = None, None, None
             for c in df_up.columns:
                 cl = str(c).lower().strip()
                 if 'temp' in cl or 'nhiet' in cl: c_t = c
                 if 'humi' in cl or 'rh' in cl or 'do am' in cl: c_h = c
-                if any(k in cl for k in ['time', 'thời gian', 'date', 'timestamp']): c_time = c
+                if any(k in cl for k in ['time', 'thời gian', 'date', 'timestamp', 'ngày']): c_time = c
 
             if not c_t: c_t = df_up.columns[0]
             if not c_h: c_h = df_up.columns[1]
             if not c_time: c_time = df_up.columns[2]
 
-            r_dts = [pd.to_datetime(str(v).strip(), errors='coerce') for v in df_up[c_time]]
+            # --- SỬA LỖI .DT ACCESSOR BẰNG ÉP KIỂU VÀ LỌC BỎ NA/NAT CHUYÊN SÂU ---
             df_calc = pd.DataFrame()
-            df_calc["datetime_internal"] = r_dts
+            df_calc["datetime_internal"] = pd.to_datetime(df_up[c_time], errors='coerce')
             df_calc["Nhiệt độ (°C)"] = pd.to_numeric(df_up[c_t], errors='coerce')
             df_calc["Độ ẩm (%)"] = pd.to_numeric(df_up[c_h], errors='coerce')
-            df_calc = df_calc.dropna().sort_values("datetime_internal")
+            
+            # Loại bỏ sạch sẽ các hàng lỗi trống hoặc lỗi ngày giờ trước khi gọi thuộc tính tuần tự .dt
+            df_calc = df_calc.dropna(subset=["datetime_internal", "Nhiệt độ (°C)", "Độ ẩm (%)"]).copy()
+            
+            if df_calc.empty:
+                st.error("❌ Không tìm thấy dữ liệu hợp lệ trong file (Lỗi cấu trúc hoặc trống).")
+                st.stop()
+                
+            df_calc = df_calc.sort_values("datetime_internal")
             df_calc["VPD (kPa)"] = df_calc.apply(lambda r: calculate_vpd(r["Nhiệt độ (°C)"], r["Độ ẩm (%)"]), axis=1)
             df_calc["only_date"] = df_calc["datetime_internal"].dt.date
+            # -----------------------------------------------------------------
 
             if "Tự chọn một ngày cụ thể" in t_filter_opt:
                 av_dates = sorted(df_calc["only_date"].unique())
                 s_date = st.date_input("Chọn ngày trên lịch:", value=av_dates[-1] if av_dates else datetime.now().date())
                 df_calc = df_calc[df_calc["only_date"] == s_date]
 
-            df_calc["Hiển thị Giờ"] = df_calc["datetime_internal"].dt.strftime("%H:%M")
-            
-            # Sử dụng dải cố định f_vpd_range[0] và f_vpd_range[1] để đánh giá trạng thái hàng loạt của file
-            df_calc["Trạng thái"] = df_calc.apply(lambda r: "⚠️ Quá ẩm" if r["VPD (kPa)"] < f_vpd_range[0] else ("✅ Lý tưởng" if r["VPD (kPa)"] <= f_vpd_range[1] else "🚨 Quá khô"), axis=1)
+            if df_calc.empty:
+                st.warning("⚠️ Không tìm thấy bản ghi dữ liệu nào khớp với ngày bạn đã chọn.")
+            else:
+                df_calc["Hiển thị Giờ"] = df_calc["datetime_internal"].dt.strftime("%H:%M")
+                df_calc["Trạng thái"] = df_calc.apply(lambda r: "⚠️ Quá ẩm" if r["VPD (kPa)"] < f_vpd_range[0] else ("✅ Lý tưởng" if r["VPD (kPa)"] <= f_vpd_range[1] else "🚨 Quá khô"), axis=1)
 
-            st.markdown("#### 📊 TỔNG QUAN CHU KỲ FILE")
-            k1, k2, k3 = st.columns(3)
-            k1.metric("VPD Trung Bình", f"{df_calc['VPD (kPa)'].mean():.2f} kPa")
-            k2.metric("Nhiệt độ TB", f"{df_calc['Nhiệt độ (°C)'].mean():.1f} °C")
-            k3.metric("Độ ẩm TB", f"{df_calc['Độ ẩm (%)'].mean():.1f} %")
+                st.markdown("#### 📊 TỔNG QUAN CHU KỲ FILE")
+                k1, k2, k3 = st.columns(3)
+                k1.metric("VPD Trung Bình", f"{df_calc['VPD (kPa)'].mean():.2f} kPa")
+                k2.metric("Nhiệt độ TB", f"{df_calc['Nhiệt độ (°C)'].mean():.1f} °C")
+                k3.metric("Độ ẩm TB", f"{df_calc['Độ ẩm (%)'].mean():.1f} %")
 
-            # Gọi hàm tính stress tĩnh cố định (Truyền giá trị Min / Max thay vì truyền Matrix dict)
-            stress = calculate_static_plant_stress(df_calc, f_vpd_range[0], f_vpd_range[1], t_filter_opt)
-            st.markdown(f"⚠️ **Đánh giá Agronomy chuyên sâu:** Tích lũy Stress Khô: `{stress['dry_hours']} giờ` | Tích lũy Stress Ẩm: `{stress['wet_hours']} giờ` (Nguy cơ bùng phát nấm: `{stress['fungus_risk']}%`)")
+                stress = calculate_static_plant_stress(df_calc, f_vpd_range[0], f_vpd_range[1], t_filter_opt)
+                st.markdown(f"⚠️ **Đánh giá Agronomy chuyên sâu:** Tích lũy Stress Khô: `{stress['dry_hours']} giờ` | Tích lũy Stress Ẩm: `{stress['wet_hours']} giờ` (Nguy cơ bùng phát nấm: `{stress['fungus_risk']}%`)")
 
-            st.altair_chart(draw_vpd_chart(df_calc, f_vpd_range[0], f_vpd_range[1]), use_container_width=True)
-            
-            # Show bảng log dữ liệu của file cho trực quan
-            st.markdown("**📋 Chi tiết bảng dữ liệu trích xuất từ file:**")
-            st.dataframe(df_calc[["Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]].style.apply(style_status_rows, axis=1), use_container_width=True, hide_index=True)
+                st.altair_chart(draw_vpd_chart(df_calc, f_vpd_range[0], f_vpd_range[1]), use_container_width=True)
+                
+                st.markdown("**📋 Chi tiết bảng dữ liệu trích xuất từ file:**")
+                st.dataframe(df_calc[["Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]].style.apply(style_status_rows, axis=1), use_container_width=True, hide_index=True)
             
         except Exception as e:
             st.error(f"❌ Lỗi cấu trúc file tải lên: {str(e)}")
