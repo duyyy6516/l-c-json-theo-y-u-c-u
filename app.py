@@ -78,14 +78,13 @@ with st.sidebar:
     tele_token_input = st.text_input("Bot Token", value=TELE_TOKEN, type="password")
     tele_chat_input = st.text_input("Chat ID", value=TELE_CHAT_ID)
 
-# Khởi tạo các tabs chức năng (Sửa tên Tab 1, Giữ nguyên Tab 2 và Thêm Tab 3)
-tab_rt, tab_file, tab_json = st.tabs([
+# Cấu hình đúng 2 Tab song song như yêu cầu
+tab_rt, tab_json = st.tabs([
     "📊 phân tích vpd theo thời gian thực", 
-    "📂 PHÂN TÍCH TỆP TIN DỮ LIỆU LOG",
     "🔮 phân tích vpd dựa vào file json"
 ])
 
-# --- TAB 1: PHÂN TÍCH VPD THEO THỜI GIAN THỰC (GIỮ NGUYÊN GỐC KHÔNG THAY ĐỔI) ---
+# --- TAB 1: PHÂN TÍCH VPD THEO THỜI GIAN THỰC (GIỮ NGUYÊN GỐC BAN ĐẦU 100%) ---
 with tab_rt:
     now = datetime.now()
     current_hour_now = now.hour
@@ -179,188 +178,78 @@ with tab_rt:
             else:
                 st.error("❌ Không thể kết nối với Telegram API. Vui lòng kiểm tra Token/Chat ID.")
 
-# --- TAB 2: PHÂN TÍCH TỆP TIN DỮ LIỆU LOG (GIỮ NGUYÊN 100%) ---
-with tab_file:
-    st.subheader("📂 Tải Lên Nhật Ký Cảm Biến Dạng Tệp Tin (CSV / XLSX)")
-    st.caption("Yêu cầu file chứa các cột tối thiểu: 'Nhiệt độ', 'Độ ẩm' hoặc 'VPD'. Nếu thiếu cột VPD, hệ thống sẽ tự tính toán dựa trên nhiệt ẩm gốc.")
-    
-    uploaded_file = st.file_uploader("Chọn file dữ liệu log cảm biến", type=["csv", "xlsx"])
-    
-    if uploaded_file is not None:
-        try:
-            if uploaded_file.name.endswith(".csv"):
-                df_file = pd.read_csv(uploaded_file)
-            else:
-                df_file = pd.read_excel(uploaded_file)
-                
-            st.success(f"🎉 Tải lên tệp thành công! Đã ghi nhận {len(df_file)} dòng dữ liệu.")
-            
-            # Chuẩn hóa tên cột tự động để tránh lỗi sai ký tự từ người dùng nhập liệu
-            rename_dict = {}
-            for col in df_file.columns:
-                if "nhiệt" in col.lower() or "temp" in col.lower(): rename_dict[col] = "Nhiệt độ (°C)"
-                elif "ẩm" in col.lower() or "humid" in col.lower(): rename_dict[col] = "Độ ẩm (%)"
-                elif "vpd" in col.lower(): rename_dict[col] = "VPD (kPa)"
-                elif "giờ" in col.lower() or "time" in col.lower() or "date" in col.lower(): rename_dict[col] = "Thời Gian"
-            df_file.rename(columns=rename_dict, inplace=True)
-            
-            # Kiểm tra xem các cột cốt lõi đã có đầy đủ chưa
-            required_cols = ["Nhiệt độ (°C)", "Độ ẩm (%)"]
-            if not all(x in df_file.columns for x in required_cols):
-                st.error("❌ Cấu trúc tệp không hợp lệ! File cần có cột dữ liệu chứa từ khóa liên quan đến 'Nhiệt độ' và 'Độ ẩm'.")
-            else:
-                # Nếu file chưa tính toán sẵn cột VPD, tự động kích hoạt tính toán bù đắp dữ liệu
-                if "VPD (kPa)" not in df_file.columns:
-                    df_file["VPD (kPa)"] = df_file.apply(lambda r: calculate_vpd(r["Nhiệt độ (°C)"], r["Độ ẩm (%)"]), axis=1)
-                
-                # Trích xuất cột thời gian hoặc tạo giả lập nếu file bị khuyết trường mốc giờ
-                if "Thời Gian" not in df_file.columns:
-                    st.warning("⚠️ Không tìm thấy cột thời gian cụ thể trong file. Hệ thống tự sinh mốc giờ tuần tự cách nhau 1 giờ.")
-                    df_file["Thời Gian"] = [datetime.now() - timedelta(hours=len(df_file)-1-idx) for idx in range(len(df_file))]
-                
-                # Ép dữ liệu trường thời gian về định dạng Datetime tiêu chuẩn và lấy giờ số nguyên
-                df_file["Thời Gian"] = pd.to_datetime(df_file["Thời Gian"])
-                df_file["Mốc Giờ"] = df_file["Thời Gian"].dt.hour
-                df_file["Hiển thị Giờ"] = df_file["Thời Gian"].dt.strftime("%H:%M")
-                
-                # Phân tích tổng quan số liệu thống kê chung của file
-                st.write("---")
-                st.subheader("🎯 Báo Cáo Phân Tích Tổng Overview Tệp Tin")
-                
-                f_preset_choice = st.selectbox("🎯 Đối sánh với mô hình cây trồng", list(PLANT_PRESETS.keys()), key="file_plant_preset")
-                f_matrix = PLANT_PRESETS[f_preset_choice]
-                
-                total_hours = len(df_file)
-                stress_h_under, stress_h_over = calculate_plant_stress_hours(df_file.to_dict('records'), f_matrix)
-                
-                f_col1, f_col2, f_col3, f_col4 = st.columns(4)
-                f_col1.metric("📊 Tổng số bản ghi", f"{total_hours} mốc")
-                f_col2.metric("🔵 Giờ quá ẩm (Dưới ngưỡng)", f"{stress_h_under} giờ", delta=f"{round(stress_h_under/total_hours*100, 1)}% tổng thời gian", delta_color="inverse")
-                f_col3.metric("🔴 Giờ quá gắt (Vượt ngưỡng)", f"{stress_h_over} giờ", delta=f"{round(stress_h_over/total_hours*100, 1)}% tổng thời gian", delta_color="inverse")
-                f_col4.metric("🟢 Trạng thái an toàn sinh học", f"{total_hours - stress_h_under - stress_h_over} giờ", delta=f"{round((total_hours - stress_h_under - stress_h_over)/total_hours*100, 1)}% An toàn")
-                
-                # Hiển thị biểu đồ phân tích trực quan cho tệp tin log tải lên
-                st.write("---")
-                st.subheader("📊 Trực Quan Hóa Dữ Liệu Biến Thiên Của File")
-                fg_col1, fg_col2 = st.columns(2)
-                with fg_col1:
-                    st.altair_chart(draw_vpd_chart(df_file), use_container_width=True)
-                with fg_col2:
-                    st.altair_chart(draw_combined_temp_humidity_chart(df_file), use_container_width=True)
-                    
-                # Bóc tách tổng hợp báo cáo ma trận chu kỳ buổi của file dữ liệu
-                st.write("---")
-                st.subheader("📋 Báo Cáo Phân Tích Ma Trận Dữ Liệu File")
-                df_block_report = analyze_day_by_blocks_rt(df_file, f_matrix)
-                
-                if not df_block_report.empty:
-                    st.dataframe(df_block_report, use_container_width=True, hide_index=True)
-                    
-                    if st.button("📤 Gửi báo cáo ma trận qua Telegram", type="primary", key="btn_send_file_tele"):
-                        if tele_token_input and tele_chat_input:
-                            file_tele_msg = f"📂 *BÁO CÁO CHU KỲ FILE*\n📦 File: `{uploaded_file.name}`\n🎯 Mô hình: *{f_preset_choice}*\n━━━━━━━━━━━━━━━━━━━━\n\n"
-                            for _, r_data in df_block_report.iterrows():
-                                file_tele_msg += f"Buổi *{r_data['Khoảng Buổi']}*\n▪️ Môi trường: {r_data['Nhiệt độ TB']} | {r_data['Độ ẩm TB']}\n▪️ VPD TB: *{r_data['VPD Trung Bình']}*\n▪️ Đánh giá: *{r_data['Đánh giá sinh học']}*\n▪️ Giải pháp: {r_data['Giải pháp kỹ thuật']}\n────────────────────\n"
-                            file_tele_msg += "\n📊 _Hệ thống tự động chấm điểm sinh học VPD Smart Farm_"
-                            success = send_telegram_message(tele_token_input, tele_chat_input, file_tele_msg)
-                            if success: 
-                                st.success("✅ Đã gửi toàn bộ dữ liệu báo cáo qua Telegram thành công!")
-                            else:
-                                st.error("❌ Không thể kết nối gửi tệp dữ liệu báo cáo qua Telegram API.")
-                else:
-                    st.info("Chưa có đủ dữ liệu thích hợp để bóc tách chu kỳ buổi.")
-
-        except Exception as err:
-            st.error(f"❌ Đã xảy ra lỗi trong quá trình xử lý tệp tin: {str(err)}")
-
-# --- TAB 3: PHÂN TÍCH VPD DỰA VÀO FILE JSON (BÊ NGUYÊN XI LOGIC XỬ LÝ CỦA TAB 2) ---
+# --- TAB 2: PHÂN TÍCH VPD DỰA VÀO FILE JSON (ĐỘC LẬP THEO ĐÚNG YÊU CẦU) ---
 with tab_json:
-    st.subheader("🔮 Tải Lên Nhật Ký Cảm Biến Định Dạng JSON")
-    st.caption("Yêu cầu file chứa các thuộc tính tối thiểu: 'Nhiệt độ', 'Độ ẩm' hoặc 'VPD'. Nếu thiếu cột VPD, hệ thống sẽ tự tính toán dựa trên nhiệt ẩm gốc.")
+    st.subheader("🔮 Tải Lên Nhật Ký Dảm Biến Định Dạng JSON")
+    st.caption("Yêu cầu file JSON chứa mảng các bản ghi dữ liệu có các trường thông tin: 'Nhiệt độ', 'Độ ẩm'.")
     
-    # Chỉ thay đổi loader để nhận file .json
     uploaded_json = st.file_uploader("Chọn file dữ liệu log cảm biến JSON", type=["json"])
     
     if uploaded_json is not None:
         try:
-            # Đọc JSON và chuyển thành DataFrame, toàn bộ logic bên dưới giữ nguyên bản của Tab 2 không thay đổi
+            # Chỉ xử lý đọc file định dạng JSON
             raw_json_data = json.load(uploaded_json)
-            df_file = pd.DataFrame(raw_json_data)
+            df_json = pd.DataFrame(raw_json_data)
                 
-            st.success(f"🎉 Tải lên tệp thành công! Đã ghi nhận {len(df_file)} dòng dữ liệu.")
+            st.success(f"🎉 Tải lên tệp JSON thành công! Đã ghi nhận {len(df_json)} dòng dữ liệu.")
             
-            # Chuẩn hóa tên cột tự động để tránh lỗi sai ký tự từ người dùng nhập liệu
+            # Chuẩn hóa tên trường của JSON tự động
             rename_dict = {}
-            for col in df_file.columns:
+            for col in df_json.columns:
                 if "nhiệt" in str(col).lower() or "temp" in str(col).lower(): rename_dict[col] = "Nhiệt độ (°C)"
                 elif "ẩm" in str(col).lower() or "humid" in str(col).lower(): rename_dict[col] = "Độ ẩm (%)"
                 elif "vpd" in str(col).lower(): rename_dict[col] = "VPD (kPa)"
                 elif "giờ" in str(col).lower() or "time" in str(col).lower() or "date" in str(col).lower(): rename_dict[col] = "Thời Gian"
-            df_file.rename(columns=rename_dict, inplace=True)
+            df_json.rename(columns=rename_dict, inplace=True)
             
-            # Kiểm tra xem các cột cốt lõi đã có đầy đủ chưa
             required_cols = ["Nhiệt độ (°C)", "Độ ẩm (%)"]
-            if not all(x in df_file.columns for x in required_cols):
-                st.error("❌ Cấu trúc tệp không hợp lệ! File cần có cột dữ liệu chứa từ khóa liên quan đến 'Nhiệt độ' và 'Độ ẩm'.")
+            if not all(x in df_json.columns for x in required_cols):
+                st.error("❌ Cấu trúc JSON không hợp lệ! File cần chứa các trường dữ liệu liên quan đến 'Nhiệt độ' và 'Độ ẩm'.")
             else:
-                # Nếu file chưa tính toán sẵn cột VPD, tự động kích hoạt tính toán bù đắp dữ liệu
-                if "VPD (kPa)" not in df_file.columns:
-                    df_file["VPD (kPa)"] = df_file.apply(lambda r: calculate_vpd(r["Nhiệt độ (°C)"], r["Độ ẩm (%)"]), axis=1)
+                # Nếu thiếu trường VPD, tự động tính toán bù
+                if "VPD (kPa)" not in df_json.columns:
+                    df_json["VPD (kPa)"] = df_json.apply(lambda r: calculate_vpd(r["Nhiệt độ (°C)"], r["Độ ẩm (%)"]), axis=1)
                 
-                # Trích xuất cột thời gian hoặc tạo giả lập nếu file bị khuyết trường mốc giờ
-                if "Thời Gian" not in df_file.columns:
-                    st.warning("⚠️ Không tìm thấy cột thời gian cụ thể trong file. Hệ thống tự sinh mốc giờ tuần tự cách nhau 1 giờ.")
-                    df_file["Thời Gian"] = [datetime.now() - timedelta(hours=len(df_file)-1-idx) for idx in range(len(df_file))]
+                # Tạo trường thời gian tuần tự nếu khuyết mốc giờ
+                if "Thời Gian" not in df_json.columns:
+                    df_json["Thời Gian"] = [datetime.now() - timedelta(hours=len(df_json)-1-idx) for idx in range(len(df_json))]
                 
-                # Ép dữ liệu trường thời gian về định dạng Datetime tiêu chuẩn và lấy giờ số nguyên
-                df_file["Thời Gian"] = pd.to_datetime(df_file["Thời Gian"])
-                df_file["Mốc Giờ"] = df_file["Thời Gian"].dt.hour
-                df_file["Hiển thị Giờ"] = df_file["Thời Gian"].dt.strftime("%H:%M")
+                df_json["Thời Gian"] = pd.to_datetime(df_json["Thời Gian"])
+                df_json["Mốc Giờ"] = df_json["Thời Gian"].dt.hour
+                df_json["Hiển thị Giờ"] = df_json["Thời Gian"].dt.strftime("%H:%M")
                 
-                # Phân tích tổng quan số liệu thống kê chung của file
+                # Biểu đồ hiển thị biến thiên của file JSON
                 st.write("---")
-                st.subheader("🎯 Báo Cáo Phân Tích Tổng Overview Tệp Tin")
-                
-                f_preset_choice = st.selectbox("🎯 Đối sánh với mô hình cây trồng", list(PLANT_PRESETS.keys()), key="json_plant_preset")
-                f_matrix = PLANT_PRESETS[f_preset_choice]
-                
-                total_hours = len(df_file)
-                stress_h_under, stress_h_over = calculate_plant_stress_hours(df_file.to_dict('records'), f_matrix)
-                
-                f_col1, f_col2, f_col3, f_col4 = st.columns(4)
-                f_col1.metric("📊 Tổng số bản ghi", f"{total_hours} mốc")
-                f_col2.metric("🔵 Giờ quá ẩm (Dưới ngưỡng)", f"{stress_h_under} giờ", delta=f"{round(stress_h_under/total_hours*100, 1)}% tổng thời gian", delta_color="inverse")
-                f_col3.metric("🔴 Giờ quá gắt (Vượt ngưỡng)", f"{stress_h_over} giờ", delta=f"{round(stress_h_over/total_hours*100, 1)}% tổng thời gian", delta_color="inverse")
-                f_col4.metric("🟢 Trạng thái an toàn sinh học", f"{total_hours - stress_h_under - stress_h_over} giờ", delta=f"{round((total_hours - stress_h_under - stress_h_over)/total_hours*100, 1)}% An toàn")
-                
-                # Hiển thị biểu đồ phân tích trực quan cho tệp tin log tải lên
-                st.write("---")
-                st.subheader("📊 Trực Quan Hóa Dữ Liệu Biến Thiên Của File")
-                fg_col1, fg_col2 = st.columns(2)
-                with fg_col1:
-                    st.altair_chart(draw_vpd_chart(df_file), use_container_width=True)
-                with fg_col2:
-                    st.altair_chart(draw_combined_temp_humidity_chart(df_file), use_container_width=True)
+                st.subheader("📊 Trực Quan Hóa Biến Thiên Dữ Liệu Từ File JSON")
+                jg_col1, jg_col2 = st.columns(2)
+                with jg_col1:
+                    st.altair_chart(draw_vpd_chart(df_json), use_container_width=True)
+                with jg_col2:
+                    st.altair_chart(draw_combined_temp_humidity_chart(df_json), use_container_width=True)
                     
-                # Bóc tách tổng hợp báo cáo ma trận chu kỳ buổi của file dữ liệu
+                # Báo cáo phân tích chu kỳ ma trận buổi từ file JSON
                 st.write("---")
-                st.subheader("📋 Báo Cáo Phân Tích Ma Trận Dữ Liệu File")
-                df_block_report = analyze_day_by_blocks_rt(df_file, f_matrix)
+                st.subheader("📋 Báo Cáo Phân Tích Chu Kỳ Sinh Học JSON")
+                
+                j_preset_choice = st.selectbox("🎯 Đối sánh với mô hình cây trồng", list(PLANT_PRESETS.keys()), key="json_plant_preset")
+                j_matrix = PLANT_PRESETS[j_preset_choice]
+                
+                df_block_report = analyze_day_by_blocks_rt(df_json, j_matrix)
                 
                 if not df_block_report.empty:
                     st.dataframe(df_block_report, use_container_width=True, hide_index=True)
                     
                     if st.button("📤 Gửi báo cáo ma trận qua Telegram", type="primary", key="btn_send_json_tele"):
                         if tele_token_input and tele_chat_input:
-                            file_tele_msg = f"📂 *BÁO CÁO CHU KỲ FILE JSON*\n📦 File: `{uploaded_json.name}`\n🎯 Mô hình: *{f_preset_choice}*\n━━━━━━━━━━━━━━━━━━━━\n\n"
+                            json_tele_msg = f"🔮 *BÁO CÁO CHU KỲ FILE JSON*\n📦 File: `{uploaded_json.name}`\n🎯 Mô hình: *{j_preset_choice}*\n━━━━━━━━━━━━━━━━━━━━\n\n"
                             for _, r_data in df_block_report.iterrows():
-                                file_tele_msg += f"Buổi *{r_data['Khoảng Buổi']}*\n▪️ Môi trường: {r_data['Nhiệt độ TB']} | {r_data['Độ ẩm TB']}\n▪️ VPD TB: *{r_data['VPD Trung Bình']}*\n▪️ Đánh giá: *{r_data['Đánh giá sinh học']}*\n▪️ Giải pháp: {r_data['Giải pháp kỹ thuật']}\n────────────────────\n"
-                            file_tele_msg += "\n📊 _Hệ thống tự động chấm điểm sinh học VPD Smart Farm_"
-                            success = send_telegram_message(tele_token_input, tele_chat_input, file_tele_msg)
+                                json_tele_msg += f"Buổi *{r_data['Khoảng Buổi']}*\n▪️ Môi trường: {r_data['Nhiệt độ TB']} | {r_data['Độ ẩm TB']}\n▪️ VPD TB: *{r_data['VPD Trung Bình']}*\n▪️ Đánh giá: *{r_data['Đánh giá sinh học']}*\n▪️ Giải pháp: {r_data['Giải pháp kỹ thuật']}\n────────────────────\n"
+                            json_tele_msg += "\n📊 _Hệ thống tự động chấm điểm sinh học VPD Smart Farm_"
+                            success = send_telegram_message(tele_token_input, tele_chat_input, json_tele_msg)
                             if success: 
                                 st.success("✅ Đã gửi toàn bộ dữ liệu báo cáo qua Telegram thành công!")
                             else:
-                                st.error("❌ Không thể kết nối gửi tệp dữ liệu báo cáo qua Telegram API.")
+                                st.error("❌ Không thể kết nối gửi dữ liệu qua Telegram API.")
                 else:
                     st.info("Chưa có đủ dữ liệu thích hợp để bóc tách chu kỳ buổi.")
 
