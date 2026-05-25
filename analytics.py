@@ -57,11 +57,10 @@ def calculate_dynamic_plant_stress(df_data, plant_matrix, mode_filter):
     if df_data.empty or "VPD (kPa)" not in df_data.columns:
         return {"dry_hours": 0.0, "wet_hours": 0.0, "fungus_risk": 0}
     
-    # Xác định số phút đại diện cho một điểm dữ liệu sau gộp
     if "1 Ngày gần nhất" in mode_filter or "10 phút" in mode_filter: 
         minutes_per_point = 10
     elif "1 Tuần gần nhất" in mode_filter or "1 Tháng gần nhất" in mode_filter: 
-        minutes_per_point = 1440  # 1 ngày = 1440 phút
+        minutes_per_point = 1440
     elif "Toàn bộ dữ liệu gốc" in mode_filter:
         if len(df_data) > 1 and "datetime_internal" in df_data.columns:
             try:
