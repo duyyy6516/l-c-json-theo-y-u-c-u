@@ -40,7 +40,6 @@ if 'is_completed' not in st.session_state: st.session_state.is_completed = False
 if 'history' not in st.session_state: st.session_state.history = []
 if 'stt_counter' not in st.session_state: st.session_state.stt_counter = 0 
 if 'simulated_time' not in st.session_state: st.session_state.simulated_time = "2026-05-24 07:00:00"
-if 'automation_webhook' not in st.session_state: st.session_state.automation_webhook = ""
 
 # Ngưỡng cây trồng mẫu mặc định cố định
 PRESETS = {
@@ -74,10 +73,6 @@ def trigger_new_data(v_min, v_max):
         "datetime_internal": current_sim_datetime, "Nhiệt độ (°C)": st.session_state.temp, "Độ ẩm (%)": st.session_state.rh,
         "VPD (kPa)": round(new_vpd, 2), "Trạng thái": status_text
     })
-    
-    if st.session_state.automation_webhook:
-        try: requests.post(st.session_state.automation_webhook, json={"vpd": new_vpd, "status": status_text}, timeout=2)
-        except: pass
 
     if TELE_TOKEN and TELE_CHAT_ID:
         unique_days = sorted(list(set([r["Ngày"] for r in st.session_state.history])), reverse=True)
@@ -96,18 +91,16 @@ def trigger_new_data(v_min, v_max):
         st.session_state.is_running = False; st.session_state.is_completed = True   
     st.session_state.simulated_time = next_dt.strftime("%Y-%m-%d %H:%M:%S")
 
-# Mồi dữ liệu ban đầu
+# Cài đặt biến dải ban đầu nếu chưa có
 if 'vpd_range_val' not in st.session_state:
     st.session_state.vpd_range_val = (0.6, 1.1)
 
+# Mồi dữ liệu ban đầu tránh lỗi
 if st.session_state.stt_counter == 0: 
     trigger_new_data(st.session_state.vpd_range_val[0], st.session_state.vpd_range_val[1])
 
-tab_future, tab_past, tab_edge = st.tabs(["🔮 MÔ PHỎNG & XEM REALTIME", "📁 QUÉT FILE IOT HỆ THỐNG", "⚙️ CẤU HÌNH WEBHOOK TỰ ĐỘNG"])
-
-with tab_edge:
-    st.markdown("### ⚙️ HỆ THỐNG ĐIỀU KHIỂN VÒNG LẶP KÍN (CLOSED-LOOP AUTOMATION)")
-    st.session_state.automation_webhook = st.text_input("Địa chỉ API Webhook kích hoạt relay phần cứng tủ điện nhà kính:", value=st.session_state.automation_webhook)
+# CHIA ĐÚNG 2 TAB TRUYỀN THỐNG NGUYÊN BẢN
+tab_future, tab_past = st.tabs(["🔮 MÔ PHỎNG & XEM REALTIME", "📁 QUÉT FILE IOT HỆ THỐNG"])
 
 # --------------------------------------------------------
 # TAB 1: MÔ PHỎNG SỐ LIỆU REALTIME
