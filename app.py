@@ -19,9 +19,10 @@ TELE_CHAT_ID = "7290661009"
 
 st.set_page_config(page_title="VPD Smart Farm Monitor Pro", page_icon="🌿", layout="wide")
 
-st.markdown("""
+# Đã thêm tiền tố r trước chuỗi nháy kép để sửa lỗi tương thích trên Python 3.14
+st.markdown(r"""
     <style>
-    html, body, [data-testid=\"stAppViewContainer\"] { overflow-y: auto !important; scroll-behavior: smooth; }
+    html, body, [data-testid="stAppViewContainer"] { overflow-y: auto !important; scroll-behavior: smooth; }
     .block-container { padding-top: 1rem; padding-bottom: 2rem; padding-left: 1.5rem; padding-right: 1.5rem; }
     .danger-box-red { padding: 12px; background-color: #C0392B; border-left: 6px solid #17202A; color: #FFFFFF; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
     .danger-box-yellow { padding: 12px; background-color: #D4AC0D; border-left: 6px solid #17202A; color: #17202A; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
@@ -97,7 +98,7 @@ with tab1:
     with m_c4:
         st.metric(label="❄️ Nhiệt độ điểm sương", value=f"{sim_dew:.1f} °C")
 
-    st.markdown("### 🔍 Đánh Giá Trạng Thái Sinh Học & Giải Pháp Điều Khiển Phần Cứng")
+    st.markdown("### 🔍 Đánh Giá Trạng thái Sinh Học & Giải Pháp Điều Khiển Phần Cứng")
     
     plant_matrix_rt = {
         "🌅 Sáng (05h-10h)": (vpd_min, vpd_max),
