@@ -32,20 +32,19 @@ def predict_vpd_trend_v3(history_data, current_hour, plant_matrix):
         diff_2 = v2 - v3
         
         if abs(diff_1) < 0.005 and abs(diff_2) < 0.005:
-            if v1 < vpd_min: return "🟦 CẢNH BÁO: Hiện trạng quá ẩm đang bị kẹt đứng im lâu. Cần bật quạt đối lưu lập tức.", "danger_blue"
-            elif v1 > vpd_max: return "🟥 CẢNH BÁO: Hiện trạng khô nóng đang đứng im kéo dài. Cần kích hoạt hệ thống phun sương.", "danger_red"
-            else: return "🟩 Xu hướng: Chỉ số VPD đang duy trì đi ngang rất ổn định trong dải lý tưởng.", "normal"
+            if v1 >= vpd_max + 0.5: return "🟥 CẢNH BÁO: Trạng thái QUÁ NÓNG đang bị kẹt kéo dài. Nguy cơ cháy lá cực cao!", "danger_red"
+            elif v1 < vpd_min - 0.2: return "🟦 CẢNH BÁO: Trạng thái QUÁ ẨM đang đứng im lâu ngày. Bật quạt đối lưu gấp!", "danger_blue"
+            elif vpd_min <= v1 <= vpd_max: return "🟩 Xu hướng: Chỉ số VPD đang duy trì đi ngang rất ổn định trong dải lý tưởng.", "normal"
+            else: return "🔄 Xu hướng: Chỉ số ít biến động nhưng nằm ngoài dải an toàn tối ưu.", "normal"
             
         slope = (diff_1 + diff_2) / 2.0
         
-        if v1 > vpd_max and slope > 0.02: 
-            return f"🚨 [CẢNH BÁO SỚM] Buổi này cây cần max {vpd_max} kPa, hiện tại {v1:.2f} kPa và đang tăng khô gắt thêm!", "danger_red"
-        if v1 < vpd_min and slope < -0.02: 
-            return f"🚨 [CẢNH BÁO SỚM] Buổi này cây cần min {vpd_min} kPa, hiện tại {v1:.2f} kPa và đang có xu hướng ẩm ướt thêm!", "danger_blue"
-            
-        if slope > 0.04: return "📈 Xu hướng: Chỉ số VPD đang tăng nhanh (Khô dần).", "normal"
-        elif slope < -0.04: return "📉 Xu hướng: Chỉ số VPD đang sụt giảm nhanh (Ẩm lên).", "normal"
-        else: return "🔄 Xu hướng: Biến động biên độ nhỏ, nằm trong tầm kiểm soát sinh học.", "normal"
+        if v1 >= vpd_max + 0.5 and slope > 0.02: return "🚨 [CẢNH BÁO ĐỎ] Đã chạm ngưỡng QUÁ NÓNG và đang tiếp tục tăng khô gắt bốc hơi!", "danger_red"
+        if v1 < vpd_min - 0.2 and slope < -0.02: return "🚨 [CẢNH BÁO ĐỎ] Đã chạm ngưỡng QUÁ ẨM và đang tiếp tục tụt sâu đọng sương!", "danger_blue"
+        
+        if slope > 0.04: return "📈 Xu hướng: Chỉ số VPD đang tăng (Khí hậu nóng khô dần).", "normal"
+        elif slope < -0.04: return "📉 Xu hướng: Chỉ số VPD đang sụt giảm (Khí hậu ẩm mát lên).", "normal"
+        else: return "🔄 Xu hướng: Biến động biên độ nhỏ, nằm trong tầm kiểm soát.", "normal"
     except:
         return f"🔄 Chỉ số xu hướng đang được chuẩn hóa toán học...", "normal"
 
@@ -54,10 +53,8 @@ def calculate_plant_stress_hours(df_data, plant_matrix, mode_filter):
     if df_data.empty or "VPD (kPa)" not in df_data.columns:
         return {"dry_hours": 0.0, "wet_hours": 0.0, "fungus_risk": 0}
     
-    if "1 Ngày gần nhất" in mode_filter or "10 phút" in mode_filter: 
-        minutes_per_point = 10
-    elif "1 Tuần gần nhất" in mode_filter or "1 Tháng gần nhất" in mode_filter: 
-        minutes_per_point = 1440
+    if "1 Ngày gần nhất" in mode_filter or "10 phút" in mode_filter: minutes_per_point = 10
+    elif "1 Tuần gần nhất" in mode_filter: minutes_per_point = 1440
     elif "Toàn bộ dữ liệu gốc" in mode_filter:
         if len(df_data) > 1 and "datetime_internal" in df_data.columns:
             try:
@@ -65,8 +62,7 @@ def calculate_plant_stress_hours(df_data, plant_matrix, mode_filter):
                 minutes_per_point = time_diffs.dt.total_seconds().median() / 60.0
             except: minutes_per_point = 10
         else: minutes_per_point = 10
-    else:
-        minutes_per_point = 10
+    else: minutes_per_point = 10
 
     dry_points = 0
     wet_points = 0
@@ -80,8 +76,10 @@ def calculate_plant_stress_hours(df_data, plant_matrix, mode_filter):
         block_name = get_biological_block(dt.hour)
         vpd_min, vpd_max = plant_matrix[block_name]
         
+        # Stress Khô khi rơi vào vùng Nóng hoặc Quá Nóng
         if vpd_val > vpd_max:
             dry_points += 1
+        # Stress Ẩm khi rơi vào vùng Ẩm hoặc Quá Ẩm
         elif vpd_val < vpd_min:
             wet_points += 1
             if 16.0 <= temp_val <= 25.0:
@@ -92,14 +90,10 @@ def calculate_plant_stress_hours(df_data, plant_matrix, mode_filter):
     fungus_hours = (fungus_points * minutes_per_point) / 60.0
     fungus_risk_pct = min(int((fungus_hours / 6.0) * 100), 100)
     
-    return {
-        "dry_hours": dry_hours,
-        "wet_hours": wet_hours,
-        "fungus_risk": fungus_risk_pct
-    }
+    return {"dry_hours": dry_hours, "wet_hours": wet_hours, "fungus_risk": fungus_risk_pct}
 
 def analyze_day_by_blocks_rt(history_list, plant_matrix, target_day_str):
-    """Phân tích báo cáo chu kỳ buổi đối chiếu trực tiếp với ma trận ngưỡng động từng buổi"""
+    """Phân tích báo cáo chu kỳ buổi đối chiếu trực tiếp với ma trận 5 trạng thái"""
     if not history_list: return pd.DataFrame()
     df = pd.DataFrame(history_list)
     df_filtered = df[df["Ngày"] == target_day_str].copy()
@@ -118,15 +112,21 @@ def analyze_day_by_blocks_rt(history_list, plant_matrix, target_day_str):
         
         vpd_min, vpd_max = plant_matrix[idx]
         
-        if avg_v < vpd_min:
-            status = f"⚠️ Quá ẩm (Mục tiêu: {vpd_min}-{vpd_max})"
-            sol = "Bật quạt đối lưu khí mạnh, mở bớt màng thông gió rèm."
+        if avg_v >= vpd_max + 0.5:
+            status = "🔴 Quá Nóng"
+            sol = "Xả rèm đỉnh, phun sương hạt mịn công suất tối đa, bật quạt hút nhiệt."
         elif avg_v > vpd_max:
-            status = f"🚨 Quá khô (Mục tiêu: {vpd_min}-{vpd_max})"
-            sol = "Kéo lưới cắt nắng sương, kích hoạt hệ thống phun mịn hạt."
+            status = "🟠 Nóng"
+            sol = "Kéo lưới cắt nắng, kích hoạt nhẹ phun sương giữ ẩm."
+        elif avg_v < vpd_min - 0.2:
+            status = "💙 Quá Ẩm"
+            sol = "Bật toàn bộ hệ thống quạt đối lưu, kích hoạt sưởi nhẹ nếu có."
+        elif avg_v < vpd_min:
+            status = "🔵 Ẩm"
+            sol = "Mở bớt rèm hông nhà kính để lưu thông khí tự nhiên."
         else:
-            status = f"✅ Lý tưởng ({vpd_min}-{vpd_max})"
-            sol = "Môi trường hoàn hảo cho buổi này. Duy trì hệ thống thông gió."
+            status = "🟩 Lý Tưởng"
+            sol = "Môi trường hoàn hảo. Duy trì hiện trạng tự động."
             
         report_data.append({
             "Khoảng Buổi": idx, "Nhiệt độ TB": f"{avg_t} °C", "Độ ẩm TB": f"{avg_h} %",
