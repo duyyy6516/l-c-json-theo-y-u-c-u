@@ -32,7 +32,6 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
     wet_limit = max(0.0, vpd_min - 0.2)
     hot_limit = vpd_max + 0.5
     
-    # Định nghĩa cấu trúc dải màu nền đứng độc lập
     zones = pd.DataFrame([
         {"start": 0.0, "end": wet_limit, "Trạng thái": "🔵 Quá Ẩm", "color": "#0B5345"},      
         {"start": wet_limit, "end": vpd_min, "Trạng thái": "🌐 Ẩm", "color": "#2980B9"},       
@@ -41,7 +40,6 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
         {"start": hot_limit, "end": 3.0, "Trạng thái": "🔴 Quá Nóng", "color": "#C0392B"}            
     ])
 
-    # Lớp Khối nền màu bão hòa 100% (Dùng chung data từ zones)
     background = alt.Chart(zones).mark_rect(opacity=1.0).encode(
         y=alt.Y('start:Q', scale=alt.Scale(domain=[0.0, 2.5]), title="Chỉ số VPD (kPa)"),
         y2='end:Q',
@@ -53,11 +51,9 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
                         legend=alt.Legend(title="Màu Cảnh Báo", orient="top", direction="horizontal"))
     )
 
-    # Lớp các đường giới hạn đứt nét màu đen
     rules_data = pd.DataFrame([{"y": wet_limit}, {"y": vpd_min}, {"y": vpd_max}, {"y": hot_limit}])
     rules = alt.Chart(rules_data).mark_rule(stroke="#17202A", strokeDash=[4, 3], strokeWidth=1.5).encode(y='y:Q')
 
-    # Lớp Đường Line dữ liệu thực tế (KHÔNG cài thuộc tính column ở đây để tránh crash lỗi)
     line = alt.Chart(df_chart).mark_line(
         point=alt.OverlayMarkDef(color="#FFFFFF", size=65, filled=True, stroke="#17202A", strokeWidth=1.5), 
         color="#FFFFFF", 
@@ -68,13 +64,11 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
         tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)', 'Độ ẩm (%)', 'VPD (kPa)', 'Trạng thái']
     )
 
-    # Gộp 3 lớp biểu đồ dạng đơn trước (Chưa bẻ hộp)
     base_layered_chart = alt.layer(background, rules, line, data=df_chart).properties(
         width=150, 
         height=380
     )
 
-    # BẺ HỘP THỜI GIAN TẠI ĐÂY (Sử dụng cấu hình .facet tinh gọn ở lớp ngoài cùng của Altair)
     final_chart = base_layered_chart.facet(
         column=alt.Column('Khúc Buổi:N', 
                           sort=["🌅 Sáng (05h-10h)", "☀️ Trưa (10h-15h)", "🌇 Chiều (15h-19h)", "🌌 Tối (19h-23h)", "🌙 Khuya (23h-05h)"],
