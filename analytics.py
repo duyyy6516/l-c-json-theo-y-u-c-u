@@ -17,7 +17,7 @@ def calculate_dew_point(temp, rh):
     return round((b * alpha) / (a - alpha), 2)
 
 def predict_vpd_trend_dynamic(history_data, current_hour, plant_matrix):
-    """Dự báo xu hướng toán học dựa trên dải VPD động của từng buổi cụ thể (Dùng cho Tab 1)"""
+    """Dự báo xu hướng toán học dựa trên dải VPD động của từng buổi cụ thể (Tab 1)"""
     if not history_data or len(history_data) < 3:
         return "📊 Hệ thống đang tích lũy thêm chu kỳ dữ liệu...", "normal"
     try:
@@ -78,7 +78,7 @@ def calculate_dynamic_plant_stress(df_data, plant_matrix, mode_filter):
     return {"dry_hours": dry_hours, "wet_hours": wet_hours, "fungus_risk": fungus_risk_pct}
 
 def calculate_static_plant_stress(df_data, vpd_min, vpd_max, mode_filter):
-    """Tính toán giờ Stress Khô / Ẩm tích lũy dựa trên DẢI CỐ ĐỊNH CẢ NGÀY (Dùng cho Tab 2)"""
+    """Tính toán giờ Stress từ bộ mã nguồn cũ của bạn cho Tab 2 (Chạy ổn định cao)"""
     if df_data.empty or "VPD (kPa)" not in df_data.columns:
         return {"dry_hours": 0.0, "wet_hours": 0.0, "fungus_risk": 0}
     
@@ -93,11 +93,9 @@ def calculate_static_plant_stress(df_data, vpd_min, vpd_max, mode_filter):
         else: minutes_per_point = 10
 
     dry_points, wet_points, fungus_points = 0, 0, 0
-
     for idx, row in df_data.iterrows():
-        vpd_val = row["VPD (kPa)"]
-        temp_val = row["Nhiệt độ (°C)"]
-        
+        vpd_val = float(row["VPD (kPa)"])
+        temp_val = float(row["Nhiệt độ (°C)"])
         if vpd_val > vpd_max: dry_points += 1
         elif vpd_val < vpd_min:
             wet_points += 1
