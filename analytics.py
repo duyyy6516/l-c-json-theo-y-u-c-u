@@ -16,14 +16,17 @@ def calculate_dew_point(temp, rh):
     alpha = ((a * temp) / (b + temp)) + np.log(rh / 100.0)
     return round((b * alpha) / (a - alpha), 2)
 
-def predict_vpd_trend_v3(history_data, current_hour, vpd_min, vpd_max):
-    """Dự báo xu hướng toán học dựa trên dải VPD cố định (Phiên bản v3)"""
+def predict_vpd_trend_v3(history_data, current_hour, plant_matrix):
+    """Dự báo xu hướng toán học dựa trên dải VPD của từng Buổi cụ thể"""
     if not history_data or len(history_data) < 3:
         return "📊 Hệ thống đang tích lũy thêm chu kỳ dữ liệu...", "normal"
     try:
         v1 = float(history_data[0]["VPD (kPa)"])
         v2 = float(history_data[1]["VPD (kPa)"])
         v3 = float(history_data[2]["VPD (kPa)"])
+        
+        current_block = get_biological_block(current_hour)
+        vpd_min, vpd_max = plant_matrix[current_block]
         
         diff_1 = v1 - v2
         diff_2 = v2 - v3
@@ -36,9 +39,9 @@ def predict_vpd_trend_v3(history_data, current_hour, vpd_min, vpd_max):
         slope = (diff_1 + diff_2) / 2.0
         
         if v1 > vpd_max and slope > 0.02: 
-            return f"🚨 [CẢNH BÁO SỚM] Chỉ số đang vượt ngưỡng max {vpd_max} kPa và đang tiếp tục tăng khô gắt thêm!", "danger_red"
+            return f"🚨 [CẢNH BÁO SỚM] Buổi này cây cần max {vpd_max} kPa, hiện tại {v1:.2f} kPa và đang tăng khô gắt thêm!", "danger_red"
         if v1 < vpd_min and slope < -0.02: 
-            return f"🚨 [CẢNH BÁO SỚM] Chỉ số đang tụt dưới ngưỡng min {vpd_min} kPa và đang có xu hướng ẩm ướt thêm!", "danger_blue"
+            return f"🚨 [CẢNH BÁO SỚM] Buổi này cây cần min {vpd_min} kPa, hiện tại {v1:.2f} kPa và đang có xu hướng ẩm ướt thêm!", "danger_blue"
             
         if slope > 0.04: return "📈 Xu hướng: Chỉ số VPD đang tăng nhanh (Khô dần).", "normal"
         elif slope < -0.04: return "📉 Xu hướng: Chỉ số VPD đang sụt giảm nhanh (Ẩm lên).", "normal"
@@ -46,8 +49,8 @@ def predict_vpd_trend_v3(history_data, current_hour, vpd_min, vpd_max):
     except:
         return f"🔄 Chỉ số xu hướng đang được chuẩn hóa toán học...", "normal"
 
-def calculate_plant_stress_hours(df_data, vpd_min, vpd_max, mode_filter):
-    """Tính toán giờ Stress Khô / Ẩm tích lũy đối chiếu theo ngưỡng cố định"""
+def calculate_plant_stress_hours(df_data, plant_matrix, mode_filter):
+    """Tính toán giờ Stress Khô / Ẩm tích lũy đối chiếu linh hoạt theo buổi sinh học"""
     if df_data.empty or "VPD (kPa)" not in df_data.columns:
         return {"dry_hours": 0.0, "wet_hours": 0.0, "fungus_risk": 0}
     
@@ -70,8 +73,12 @@ def calculate_plant_stress_hours(df_data, vpd_min, vpd_max, mode_filter):
     fungus_points = 0
 
     for idx, row in df_data.iterrows():
+        dt = row["datetime_internal"]
         vpd_val = row["VPD (kPa)"]
         temp_val = row["Nhiệt độ (°C)"]
+        
+        block_name = get_biological_block(dt.hour)
+        vpd_min, vpd_max = plant_matrix[block_name]
         
         if vpd_val > vpd_max:
             dry_points += 1
@@ -91,8 +98,8 @@ def calculate_plant_stress_hours(df_data, vpd_min, vpd_max, mode_filter):
         "fungus_risk": fungus_risk_pct
     }
 
-def analyze_day_by_blocks_rt(history_list, vpd_min, vpd_max, target_day_str):
-    """Phân tích báo cáo chu kỳ buổi đối chiếu trực tiếp với ngưỡng cố định ban đầu"""
+def analyze_day_by_blocks_rt(history_list, plant_matrix, target_day_str):
+    """Phân tích báo cáo chu kỳ buổi đối chiếu trực tiếp với ma trận ngưỡng động từng buổi"""
     if not history_list: return pd.DataFrame()
     df = pd.DataFrame(history_list)
     df_filtered = df[df["Ngày"] == target_day_str].copy()
@@ -109,11 +116,13 @@ def analyze_day_by_blocks_rt(history_list, vpd_min, vpd_max, target_day_str):
         avg_h = round(row["Độ ẩm (%)"], 1)
         avg_v = round(row["VPD (kPa)"], 2)
         
+        vpd_min, vpd_max = plant_matrix[idx]
+        
         if avg_v < vpd_min:
-            status = f"⚠️ Quá ẩm (Mục tiêu cố định: {vpd_min}-{vpd_max})"
+            status = f"⚠️ Quá ẩm (Mục tiêu: {vpd_min}-{vpd_max})"
             sol = "Bật quạt đối lưu khí mạnh, mở bớt màng thông gió rèm."
         elif avg_v > vpd_max:
-            status = f"🚨 Quá khô (Mục tiêu cố định: {vpd_min}-{vpd_max})"
+            status = f"🚨 Quá khô (Mục tiêu: {vpd_min}-{vpd_max})"
             sol = "Kéo lưới cắt nắng sương, kích hoạt hệ thống phun mịn hạt."
         else:
             status = f"✅ Lý tưởng ({vpd_min}-{vpd_max})"
