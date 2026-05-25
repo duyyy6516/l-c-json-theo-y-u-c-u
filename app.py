@@ -19,8 +19,18 @@ TELE_CHAT_ID = "7290661009"
 
 st.set_page_config(page_title="VPD Smart Farm Monitor Pro", page_icon="🌿", layout="wide")
 
-# SỬA LỖI XUNG ĐỘT NHÁY KÉP TRÊN PYTHON 3.14: Sử dụng nháy đơn bao ngoài, nháy kép nguyên bản bên trong CSS và bỏ dấu gạch chéo ngược
-st.markdown('<style>html, body, [data-testid="stAppViewContainer"] { overflow-y: auto !important; scroll-behavior: smooth; } .block-container { padding-top: 1rem; padding-bottom: 2rem; padding-left: 1.5rem; padding-right: 1.5rem; } .danger-box-red { padding: 12px; background-color: #C0392B; border-left: 6px solid #17202A; color: #FFFFFF; font-weight: bold; border-radius: 4px; margin-bottom: 8px; } .danger-box-yellow { padding: 12px; background-color: #D4AC0D; border-left: 6px solid #17202A; color: #17202A; font-weight: bold; border-radius: 4px; margin-bottom: 8px; } .danger-box-blue { padding: 12px; background-color: #2E86C1; border-left: 6px solid #17202A; color: #FFFFFF; font-weight: bold; border-radius: 4px; margin-bottom: 8px; } .normal-box { padding: 12px; background-color: #27AE60; border-left: 6px solid #117A65; color: #FFFFFF; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }</style>', unsafe_with_html=True)
+# SỬA LỖI TRUYỀN CHUỖI DÀI TRÊN PYTHON 3.14: Định nghĩa CSS bằng danh sách các phần tử ngắn gọn và nối chuỗi tự động
+css_styles = [
+    "<style>",
+    "html, body, [data-testid='stAppViewContainer'] { overflow-y: auto !important; scroll-behavior: smooth; }",
+    ".block-container { padding-top: 1rem; padding-bottom: 2rem; padding-left: 1.5rem; padding-right: 1.5rem; }",
+    ".danger-box-red { padding: 12px; background-color: #C0392B; border-left: 6px solid #17202A; color: #FFFFFF; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }",
+    ".danger-box-yellow { padding: 12px; background-color: #D4AC0D; border-left: 6px solid #17202A; color: #17202A; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }",
+    ".danger-box-blue { padding: 12px; background-color: #2E86C1; border-left: 6px solid #17202A; color: #FFFFFF; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }",
+    ".normal-box { padding: 12px; background-color: #27AE60; border-left: 6px solid #117A65; color: #FFFFFF; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }",
+    "</style>"
+]
+st.markdown("".join(css_styles), unsafe_with_html=True)
 
 PRESETS = {
     "🌱 Cây con / Nhân giống (0.4 - 0.8 kPa)": {"min": 0.4, "max": 0.8},
