@@ -4,41 +4,40 @@ import pandas as pd
 def draw_vpd_chart(df, v_min, v_max):
     """
     Vẽ biểu đồ diễn biến chỉ số VPD theo thời gian trong ngày.
-    Đã được cấu hình tăng biên trên (Top Padding) theo Cách 1 để sửa lỗi bị mất chữ chú thích.
+    Đã được chuẩn hóa cú pháp alt.Y(datum=...) để sửa lỗi crash trên Python 3.14 / Altair mới.
     """
     if df.empty:
-        # Trả về một biểu đồ trống nếu chưa có dữ liệu để tránh lỗi giao diện
         return alt.Chart(pd.DataFrame()).mark_blank()
 
     # 1. Định nghĩa các vùng màu nền đại diện cho các trạng thái của môi trường (Solid background)
     # Vùng Quá Ẩm (0.0 -> v_min - 0.2)
     zone_too_wet = alt.Chart(df).mark_rect(opacity=0.9, color='#0B5345').encode(
         y=alt.value(350),
-        y2=alt.Y('zone_wet_low:Q').datum(0.0)
+        y2=alt.Y(datum=0.0)
     )
 
     # Vùng Ẩm (v_min - 0.2 -> v_min)
     zone_wet = alt.Chart(df).mark_rect(opacity=0.9, color='#2980B9').encode(
-        y=alt.Y('zone_wet_low:Q').datum(0.0 if v_min - 0.2 < 0 else v_min - 0.2),
-        y2=alt.Y('zone_wet_high:Q').datum(v_min)
+        y=alt.Y(datum=0.0 if v_min - 0.2 < 0 else v_min - 0.2),
+        y2=alt.Y(datum=v_min)
     )
 
     # Vùng Lý Tưởng (v_min -> v_max)
     zone_ideal = alt.Chart(df).mark_rect(opacity=0.9, color='#27AE60').encode(
-        y=alt.Y('zone_ideal_low:Q').datum(v_min),
-        y2=alt.Y('zone_ideal_high:Q').datum(v_max)
+        y=alt.Y(datum=v_min),
+        y2=alt.Y(datum=v_max)
     )
 
     # Vùng Nóng (v_max -> v_max + 0.5)
     zone_hot = alt.Chart(df).mark_rect(opacity=0.9, color='#F39C12').encode(
-        y=alt.Y('zone_hot_low:Q').datum(v_max),
-        y2=alt.Y('zone_hot_high:Q').datum(v_max + 0.5)
+        y=alt.Y(datum=v_max),
+        y2=alt.Y(datum=v_max + 0.5)
     )
 
     # Vùng Quá Nóng (v_max + 0.5 trở lên)
     zone_too_hot = alt.Chart(df).mark_rect(opacity=0.9, color='#C0392B').encode(
-        y=alt.Y('zone_toohot_low:Q').datum(v_max + 0.5),
-        y2=alt.Y('zone_toohot_high:Q').datum(3.0) # Ngưỡng trần tối đa hiển thị vùng đỏ
+        y=alt.Y(datum=v_max + 0.5),
+        y2=alt.Y(datum=3.0)
     )
 
     # 2. Tạo đường vẽ dữ liệu VPD thực tế (Đường Line màu trắng có node tròn)
@@ -95,10 +94,7 @@ def draw_vpd_chart(df, v_min, v_max):
             anchor='start'     # Căn lề trái thẳng hàng với trục Y
         )
     ).configure_view(
-        # ĐÂY LÀ KHỐI LỆNH SỬA LỖI THEO CÁCH 1:
-        # Ép buộc toàn bộ vùng đồ thị màu dịch xuống dưới một khoảng padding là 45px.
-        # Khoảng trống này giúp dòng chữ chú thích hiển thị độc lập, hoàn toàn không bị 
-        # nút ba chấm công cụ tải ảnh mặc định của Streamlit đè mất chữ.
+        # Hạ thấp toàn bộ vùng đồ thị màu dịch xuống dưới một khoảng padding là 45px để tránh mất chữ.
         padding={'top': 45, 'bottom': 10, 'left': 15, 'right': 15}
     ).configure_axis(
         domain=False
