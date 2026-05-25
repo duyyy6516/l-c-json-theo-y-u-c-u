@@ -46,7 +46,7 @@ def predict_vpd_trend_v3(history_data, current_hour, plant_matrix):
         elif slope < -0.04: return "📉 Xu hướng: Chỉ số VPD đang sụt giảm (Khí hậu ẩm mát lên).", "normal"
         else: return "🔄 Xu hướng: Biến động biên độ nhỏ, nằm trong tầm kiểm soát.", "normal"
     except:
-        return f"🔄 Chỉ số xu hướng đang được chuẩn hóa toán học...", "normal"
+        return "🔄 Chỉ số xu hướng đang được chuẩn hóa toán học...", "normal"
 
 def calculate_plant_stress_hours(df_data, plant_matrix, mode_filter):
     """Tính toán giờ Stress Khô / Ẩm tích lũy đối chiếu linh hoạt theo buổi sinh học"""
@@ -76,10 +76,8 @@ def calculate_plant_stress_hours(df_data, plant_matrix, mode_filter):
         block_name = get_biological_block(dt.hour)
         vpd_min, vpd_max = plant_matrix[block_name]
         
-        # Stress Khô khi rơi vào vùng Nóng hoặc Quá Nóng
         if vpd_val > vpd_max:
             dry_points += 1
-        # Stress Ẩm khi rơi vào vùng Ẩm hoặc Quá Ẩm
         elif vpd_val < vpd_min:
             wet_points += 1
             if 16.0 <= temp_val <= 25.0:
