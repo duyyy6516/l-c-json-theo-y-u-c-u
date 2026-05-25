@@ -297,9 +297,15 @@ with tab_past:
                 except:
                     raw_datetimes.append(datetime.now())
 
+            # --- BỘ LỌC DỮ LIỆU THÔNG MINH SỬA LỖI NHIỆT ĐỘ > 45°C NGOÀI ĐỜI THỰC ---
             df_raw_calc = pd.DataFrame()
             df_raw_calc["datetime_internal"] = raw_datetimes
-            df_raw_calc["Nhiệt độ (°C)"] = pd.to_numeric(df_upload[col_temp], errors='coerce').apply(lambda x: x / 10.0 if pd.notna(x) and x > 75.0 else x)
+            
+            # Đọc dữ liệu nhiệt độ gốc
+            raw_temp_series = pd.to_numeric(df_upload[col_temp], errors='coerce')
+            # Nếu nhiệt độ trung bình của file đang > 45, hoặc điểm dữ liệu > 45: tự động chia 10 về chuẩn thực tế nhà kính
+            df_raw_calc["Nhiệt độ (°C)"] = raw_temp_series.apply(lambda x: x / 10.0 if pd.notna(x) and x >= 45.0 else x)
+            
             df_raw_calc["Độ ẩm (%)"] = pd.to_numeric(df_upload[col_rh], errors='coerce').apply(lambda x: x / 100.0 if pd.notna(x) and x > 100.0 else x)
             df_raw_calc = df_raw_calc[df_raw_calc["Độ ẩm (%)"] > 1.0].dropna(subset=["Nhiệt độ (°C)", "Độ ẩm (%)"]).sort_values("datetime_internal")
 
@@ -475,7 +481,7 @@ with tab_past:
                             file_tele_msg += f"▪️ VPD TB: *{r_data['VPD Trung Bình']}*\n"
                             file_tele_msg += f"▪️ Đánh giá: _{r_data['Đánh giá']}_\n"
                             file_tele_msg += f"▪️ Giải pháp: {r_data['Biện pháp kỹ thuật đề xuất']}\n"
-                            file_tele_msg += f"────────────────────\n"
+                            file_tele_msg += f"─" * 20 + "\n"
                             
                         file_tele_msg += f"\n📊 _Hệ thống phân tích tự động thông minh VPD Farm_"
                         success = send_telegram_message(TELE_TOKEN, TELE_CHAT_ID, file_tele_msg)
