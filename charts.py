@@ -4,12 +4,12 @@ import pandas as pd
 def draw_vpd_chart(df, v_min=None, v_max=None):
     """
     Vẽ đường diễn biến VPD phong cách tối giản tuyệt đối (Minimalism).
-    Đã bỏ phân chia màu nền và bỏ toàn bộ bảng chú thích trạng thái sinh học theo yêu cầu.
+    Không màu nền, không đổi màu chấm tròn, không bảng chú thích (Legend).
     """
     if df.empty:
         return alt.Chart(pd.DataFrame()).mark_blank()
 
-    # Lấy mốc thời gian và ép kiểu về List Python thuần để tránh lỗi hệ thống trục X
+    # Lấy mốc thời gian và ép kiểu về List Python để tránh lỗi hệ thống trục X
     unique_hours = df['Hiển thị Giờ'].unique()
     if len(unique_hours) > 15:
         axis_values = list(unique_hours[::2])
@@ -26,7 +26,6 @@ def draw_vpd_chart(df, v_min=None, v_max=None):
         values=axis_values
     )
 
-    # Khởi tạo biểu đồ nền trắng sạch sẽ
     base = alt.Chart(df).encode(
         x=alt.X('Hiển thị Giờ:O', title='Mốc Thời Gian Trong Ngày', axis=x_axis_config)
     )
@@ -42,16 +41,16 @@ def draw_vpd_chart(df, v_min=None, v_max=None):
         ).encode(y='y:Q')
         rule_charts = [rule_min, rule_max]
 
-    # 2. ĐƯỜNG ĐỒ THỊ CHÍNH: Màu xanh lục đậm nét mượt mà
+    # 2. Đường đồ thị chính: Màu xanh lục đậm mượt mà
     vpd_line = base.mark_line(
-        color='#27AE60', 
+        color='#27AE60', \
         strokeWidth=3.5, 
         interpolate='monotone'
     ).encode(
         y=alt.Y('VPD (kPa):Q', title='Áp Suất Thâm Hụt Hơi VPD (kPa)', scale=alt.Scale(domain=[0.0, 2.5]))
     )
 
-    # 3. CÁC ĐIỂM CHẤM TRÒN: Đồng nhất một màu xanh lục, không đổi màu sinh học, không tạo chú thích (Legend)
+    # 3. Các chấm tròn giao điểm: Đồng nhất viền xanh ruột trắng tinh tế
     vpd_points = base.mark_point(
         size=60, 
         filled=True, 
@@ -62,7 +61,6 @@ def draw_vpd_chart(df, v_min=None, v_max=None):
         y=alt.Y('VPD (kPa):Q')
     )
 
-    # Lồng ghép các thành phần
     final_chart = alt.layer(vpd_line, vpd_points, *rule_charts).properties(
         title=alt.TitleParams(
             text='📉 BIỂU ĐỒ THEO DÕI SỨC KHỎE CÂY TRỒNG (VPD THỰC TẾ)',
@@ -83,7 +81,8 @@ def draw_vpd_chart(df, v_min=None, v_max=None):
 
 def draw_combined_temp_humidity_chart(df):
     """
-    Vẽ biểu đồ động học môi trường trục kép tương quan giữa Nhiệt độ và Độ ẩm.
+    Vẽ biểu đồ tương quan Nhiệt - Ẩm trục kép song song dạng Đường (Line Chart).
+    Sửa triệt để lỗi che khuất khúc đồ thị bằng cách để trục Y tự động co giãn (Auto-scale).
     """
     if df.empty:
         return alt.Chart(pd.DataFrame()).mark_blank()
@@ -108,53 +107,67 @@ def draw_combined_temp_humidity_chart(df):
         x=alt.X('Hiển thị Giờ:O', title='Mốc Thời Gian Trong Ngày', axis=x_axis_config)
     )
 
-    # Lớp độ ẩm: Vùng diện tích mờ màu xanh dương phẳng thoáng đãng
-    humidity_area = base.mark_area(
-        color='#AED6F1',
-        opacity=0.45,
+    # LỚP ĐỘ ẨM: Chuyển hoàn toàn sang đường Line xanh dương, tự động co giãn theo biên độ thực tế
+    h_min = float(df['Độ ẩm (%)'].min() - 5)
+    h_max = float(df['Độ ẩm (%)'].max() + 5)
+    # Khống chế biên an toàn không vượt quá 100% hoặc dưới 0%
+    h_min = max(0.0, h_min)
+    h_max = min(100.0, h_max)
+
+    humidity_line = base.mark_line(
+        color='#3498DB', 
+        strokeWidth=3, 
         interpolate='monotone'
     ).encode(
         y=alt.Y('Độ ẩm (%):Q', 
                 title='Độ Ẩm Không Khí Tương Đối (%)',
-                scale=alt.Scale(domain=[20, 100]),
+                scale=alt.Scale(domain=[h_min, h_max]),
                 axis=alt.Axis(titleColor='#2980B9', orient='right', grid=False))
     )
 
-    humidity_line = base.mark_line(color='#3498DB', strokeWidth=1.5, strokeDash=[3, 3]).encode(
+    humidity_points = base.mark_point(
+        color='#3498DB', 
+        fill='#FFFFFF', 
+        size=40, 
+        strokeWidth=1.5
+    ).encode(
         y=alt.Y('Độ ẩm (%):Q')
     )
 
-    # Lớp nhiệt độ: Đường Line đỏ rực rỡ chạy đè lên trên lớp ẩm
+    # LỚP NHIỆT ĐỘ: Đường Line đỏ rực rỡ độc lập trục bên trái
+    t_min = float(df['Nhiệt độ (°C)'].min() - 2)
+    t_max = float(df['Nhiệt độ (°C)'].max() + 2)
+
     temp_line = base.mark_line(
         color='#E74C3C', 
-        strokeWidth=3.5,
+        strokeWidth=3,
         interpolate='monotone'
     ).encode(
         y=alt.Y('Nhiệt độ (°C):Q', 
                 title='Nhiệt Độ Môi Trường (°C)',
-                scale=alt.Scale(domain=[float(df['Nhiệt độ (°C)'].min() - 3), float(df['Nhiệt độ (°C)'].max() + 3)]),
+                scale=alt.Scale(domain=[t_min, t_max]),
                 axis=alt.Axis(titleColor='#C0392B', orient='left', grid=True, gridDash=[2,2], gridColor='#EAEAEA'))
     )
 
     temp_points = base.mark_point(
         color='#E74C3C', 
         fill='#FFFFFF', 
-        size=50, 
-        strokeWidth=2
+        size=40, 
+        strokeWidth=1.5
     ).encode(
         y=alt.Y('Nhiệt độ (°C):Q')
     )
 
+    # Tích hợp trục kép độc lập hoàn toàn
     final_combined = alt.layer(
-        humidity_area, 
-        humidity_line,
+        alt.layer(humidity_line, humidity_points),
         alt.layer(temp_line, temp_points)
     ).resolve_scale(
         y='independent'
     ).properties(
         title=alt.TitleParams(
             text='🌡️ ĐỘNG HỌC MÔI TRƯỜNG: MỐI QUAN HỆ NHIỆT - ẨM CHU KỲ',
-            subtitle='Màu đỏ đại diện cho Nhiệt độ (°C), Vùng màu xanh dương nhạt đại diện cho Độ ẩm (%)',
+            subtitle='Đường Đỏ: Nhiệt độ (°C) [Trục trái]  |  Đường Xanh: Độ ẩm (%) [Trục phải]',
             anchor='start',
             fontSize=14,
             subtitleFontSize=11,
