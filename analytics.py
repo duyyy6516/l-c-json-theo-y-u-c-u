@@ -2,11 +2,11 @@ import pandas as pd
 import numpy as np
 
 def get_biological_block(hour):
-    if 5 <= hour < 10: return "🌅 Sáng (05h - 10h)"
-    elif 10 <= hour < 15: return "☀️ Trưa (10h - 15h)"
-    elif 15 <= hour < 19: return "🌇 Chiều (15h - 19h)"
-    elif 19 <= hour < 23: return "🌌 Tối (19h - 23h)"
-    else: return "🌙 Khuya (23h - 05h)"
+    if 5 <= hour < 10: return "🌅 Sáng (05h-10h)"
+    elif 10 <= hour < 15: return "☀️ Trưa (10h-15h)"
+    elif 15 <= hour < 19: return "🌇 Chiều (15h-19h)"
+    elif 19 <= hour < 23: return "🌌 Tối (19h-23h)"
+    else: return "🌙 Khuya (23h-05h)"
 
 def calculate_dew_point(temp, rh):
     a = 17.27
@@ -94,7 +94,7 @@ def analyze_day_by_blocks_rt(history_list, plant_matrix, target_day_str):
     
     df_filtered["Buổi"] = df_filtered["datetime_internal"].dt.hour.apply(get_biological_block)
     summary = df_filtered.groupby("Buổi").agg({"Nhiệt độ (°C)": "mean", "Độ ẩm (%)": "mean", "VPD (kPa)": "mean"}).reindex([
-        "🌅 Sáng (05h - 10h)", "☀️ Trưa (10h - 15h)", "🌇 Chiều (15h - 19h)", "🌌 Tối (19h - 23h)", "🌙 Khuya (23h - 05h)"
+        "🌅 Sáng (05h-10h)", "☀️ Trưa (10h-15h)", "🌇 Chiều (15h-19h)", "🌌 Tối (19h-23h)", "🌙 Khuya (23h-05h)"
     ]).dropna()
     
     report_data = []
