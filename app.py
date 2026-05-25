@@ -99,7 +99,7 @@ def trigger_new_data(plant_matrix):
         h_latest = [r for r in st.session_state.history if r["Ngày"] == (unique_days[0] if unique_days else current_date_str)]
         trend, trend_type = predict_vpd_trend_v3(h_latest, current_sim_datetime.hour, plant_matrix)
         
-        msg = (f"🌿 *VPD MONITOR 5 PHÂN VÙNG ĐẬM*\n⏰ {current_date_str} - {current_sim_datetime.strftime('%H:%M')} ({buoi_hien_tai})\n"
+        msg = (f"🌿 *VPD MONITOR LIỀN MẠCH VẠCH DỌC*\n⏰ {current_date_str} - {current_sim_datetime.strftime('%H:%M')} ({buoi_hien_tai})\n"
                f"📊 Môi trường: {st.session_state.temp}°C | {st.session_state.rh}%\n"
                f"*VPD thực tế:* *{new_vpd:.2f} kPa* (Ngưỡng lý tưởng buổi: {v_min}-{v_max} kPa)\n"
                f"📢 *Hiện trạng:* {status_text}\n🔮 *Dự báo:* _{trend}_")
@@ -208,7 +208,8 @@ with tab_future:
             
             m_tab1, m_tab2 = st.tabs(["📈 Đồ thị biến động", "📋 Bảng nhật ký chi tiết"])
             with m_tab1:
-                st.altair_chart(draw_vpd_chart(df_f, v_min, v_max), use_container_width=False)
+                # Trả lại use_container_width=True để biểu đồ trải full khung rộng đẹp mắt
+                st.altair_chart(draw_vpd_chart(df_f, v_min, v_max), use_container_width=True)
             with m_tab2:
                 st.dataframe(df_f[["STT", "Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]].style.apply(style_status_rows, axis=1), use_container_width=True, hide_index=True)
 
@@ -384,7 +385,7 @@ with tab_past:
                 f_tab1, f_tab2, f_tab3 = st.tabs(["🎯 Chỉ số VPD", "🌡️ Nhiệt độ khí", "💧 Độ ẩm khí"])
                 
                 f_min_sample, f_max_sample = file_matrix["🌅 Sáng (05h-10h)"]
-                with f_tab1: st.altair_chart(draw_vpd_chart(df_processed, f_min_sample, f_max_sample), use_container_width=False)
+                with f_tab1: st.altair_chart(draw_vpd_chart(df_processed, f_min_sample, f_max_sample), use_container_width=True)
                 with f_tab2: st.altair_chart(draw_temperature_chart(df_processed), use_container_width=True)
                 with f_tab3: st.altair_chart(draw_humidity_chart(df_processed), use_container_width=True)
             with res_right:
@@ -400,7 +401,7 @@ with tab_past:
                 
                 if st.button("📤 Gửi báo cáo ma trận qua Telegram", type="primary", key="btn_send_file_tele"):
                     if TELE_TOKEN and TELE_CHAT_ID:
-                        file_tele_msg = f"📂 *BÁO CÁO CHU KỲ FILE - 5 PHÂN VÙNG ĐẬM*\n📦 File: `{uploaded_file.name}`\n🎯 Mô hình: *{f_preset_choice}*\n━━━━━━━━━━━━━━━━━━━━\n\n"
+                        file_tele_msg = f"📂 *BÁO CÁO CHU KỲ FILE - PHONG CÁCH LIỀN MẠCH*\n📦 File: `{uploaded_file.name}`\n🎯 Mô hình: *{f_preset_choice}*\n━━━━━━━━━━━━━━━━━━━━\n\n"
                         for _, r_data in df_block_report.iterrows():
                             file_tele_msg += f"Buổi *{r_data['Khoảng Buổi']}*\n▪️ Môi trường: {r_data['Nhiệt độ TB']} | {r_data['Độ ẩm TB']}\n▪️ VPD TB: *{r_data['VPD Trung Bình']}*\n▪️ Đánh giá: *{r_data['Đánh giá sinh học']}*\n▪️ Giải pháp: {r_data['Giải pháp kỹ thuật']}\n────────────────────\n"
                         file_tele_msg += f"\n📊 _Hệ thống tự động chấm điểm sinh học VPD Smart Farm_"
