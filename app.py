@@ -152,6 +152,18 @@ with tab_future:
                 if st.button("⏸️ Tạm dừng trạm", type="secondary", use_container_width=True):
                     st.session_state.is_running = False
                     st.rerun()
+            
+            # --- NÚT RESET MỚI ĐƯỢC THÊM VÀO ĐÂY ---
+            if st.button("🔄 Reset dữ liệu trạm", type="secondary", use_container_width=True):
+                st.session_state.history = []
+                st.session_state.stt_counter = 0
+                st.session_state.countdown = 15
+                st.session_state.is_running = False
+                st.session_state.is_completed = False
+                st.session_state.simulated_time = "2026-05-24 07:00:00"
+                trigger_new_data(st.session_state.current_matrix)
+                st.rerun()
+            # ----------------------------------------
 
         run_interval = 1 if st.session_state.is_running else 999999
         @st.fragment(run_every=run_interval)
@@ -208,10 +220,7 @@ with tab_future:
             
             m_tab1, m_tab2 = st.tabs(["📈 Đồ thị biến động liền mạch", "📋 Bảng nhật ký chi tiết"])
             with m_tab1:
-                # 1. Biểu đồ chỉ số VPD chính
                 st.altair_chart(draw_vpd_chart(df_f, v_min, v_max), use_container_width=True)
-                
-                # 2. Biểu đồ Nhiệt - Ẩm lồng nhau đặt ngay bên dưới biểu đồ VPD
                 st.altair_chart(draw_combined_temp_humidity_chart(df_f), use_container_width=True)
                 
                 st.markdown("##### 📝 BẢNG ĐÁNH GIÁ CHUNG THEO CÁC BUỔI TRONG NGÀY (REALTIME)")
