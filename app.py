@@ -297,13 +297,13 @@ with tab_past:
                 except:
                     raw_datetimes.append(datetime.now())
 
-            # --- BỘ LỌC DỮ LIỆU THÔNG MINH SỬA LỖI NHIỆT ĐỘ > 45°C NGOÀI ĐỜI THỰC ---
+            # --- BỘ LỌC DỮ LIỆU THÔNG MINH SỬA LỖI NHIỆT ĐỘ > 45°C TRÊN CẢM BIẾN ---
             df_raw_calc = pd.DataFrame()
             df_raw_calc["datetime_internal"] = raw_datetimes
             
-            # Đọc dữ liệu nhiệt độ gốc
+            # Đọc chuỗi số nhiệt độ thô từ file
             raw_temp_series = pd.to_numeric(df_upload[col_temp], errors='coerce')
-            # Nếu nhiệt độ trung bình của file đang > 45, hoặc điểm dữ liệu > 45: tự động chia 10 về chuẩn thực tế nhà kính
+            # Nếu điểm số dữ liệu lớn hơn hoặc bằng 45 độ C (Thường do cảm biến lỗi chưa chia 10), tiến hành tự động dọn sạch
             df_raw_calc["Nhiệt độ (°C)"] = raw_temp_series.apply(lambda x: x / 10.0 if pd.notna(x) and x >= 45.0 else x)
             
             df_raw_calc["Độ ẩm (%)"] = pd.to_numeric(df_upload[col_rh], errors='coerce').apply(lambda x: x / 100.0 if pd.notna(x) and x > 100.0 else x)
@@ -331,7 +331,7 @@ with tab_past:
             df_for_block_analysis = df_raw_calc.copy()
 
             if len(df_raw_calc) > 0:
-                # Lưu số lượng ngày thực tế sau bộ lọc
+                # Lưu số lượng ngày thực tế sau bộ lọc chu kỳ
                 unique_days_filtered = df_raw_calc["only_date"].nunique()
                 
                 df_resample_input = df_raw_calc[["datetime_internal", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD_raw"]].copy()
@@ -360,9 +360,9 @@ with tab_past:
             df_processed["Độ ẩm (%)"] = df_resampled["Độ ẩm (%)"].round(2)
             df_processed["Hiển thị Giờ"] = df_resampled["Hiển thị Giờ"]
             
-            # ĐIỀU KIỆN LOGIC KHẮC PHỤC LỖI ĐỘT BIẾN VPD:
+            # ĐIỀU KIỆN LOGIC KHẮC PHỤC LỖI ĐỘT BIẾN VPD KHI XEM TRÊN 2 NGÀY:
             # Nếu tập dữ liệu lọc ra lớn hơn 2 ngày (> 2): Lấy trực tiếp cột VPD trung bình làm mịn (VPD_raw).
-            # Ngược lại nếu nhỏ hơn hoặc bằng 2 ngày: Tính trực tiếp cơ học cơ bản từ cặp giá trị.
+            # Ngược lại nếu nhỏ hơn hoặc bằng 2 ngày: Tính trực tiếp cơ học cơ bản từ cặp giá trị gốc.
             if unique_days_filtered > 2:
                 df_processed["VPD (kPa)"] = df_resampled["VPD_raw"].round(2)
             else:
@@ -371,7 +371,7 @@ with tab_past:
             df_processed["Ngày"] = "Dữ liệu File"
             df_processed["Trạng thái"] = df_processed["VPD (kPa)"].apply(lambda x: "⚠️ Quá ẩm" if x < file_vpd_min else ("✅ Lý tưởng" if x <= file_vpd_max else "🚨 Quá khô"))
             
-            # --- KPIs THỐNG KÊ TỔNG QUAN ---
+            # --- KPIs THỐNG KÊ TỔNG QUAN CHU KỲ ---
             st.markdown("<div style='margin-top:15px; margin-bottom:5px; font-weight:bold; color:#1A5276;'>📊 TỔNG QUAN CHU KỲ SAU KHI GỘP SỐ LIỆU TỐI ƯU</div>", unsafe_allow_html=True)
             m_col1, m_col2, m_col3, m_col4 = st.columns(4)
             with m_col1:
@@ -394,11 +394,21 @@ with tab_past:
                 with file_sub_tab3: st.altair_chart(draw_humidity_chart(df_processed), use_container_width=True)
                 with file_sub_tab4: st.altair_chart(draw_combined_chart(df_processed), use_container_width=True)
                 
+            # --- BẢNG NHẬT KÝ THEO DÕI ĐIỂM GỘP CHU KỲ (ĐÃ SỬA LỖI CHUỖI SỐ DƯ THỪA TRONG FLOATING-POINT) ---
             with res_right:
                 st.markdown("<div style='font-weight:bold; color:#1A5276; margin-bottom:5px;'>📋 BẢNG NHẬT KÝ THEO DÕI ĐIỂM GỘP CHU KỲ</div>", unsafe_allow_html=True)
                 preview_cols = ["Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]
                 
-                styled_df_file = df_processed[preview_cols].style.apply(style_status_rows, axis=1)
+                # Tạo bản sao sạch sẽ để ép buộc định dạng hiển thị chuỗi số thập phân gọn gàng (.2f)
+                df_table_clean = df_processed[preview_cols].copy()
+                df_table_clean["Nhiệt độ (°C)"] = df_table_clean["Nhiệt độ (°C)"].apply(lambda x: f"{float(x):.2f}")
+                df_table_clean["Độ ẩm (%)"] = df_table_clean["Độ ẩm (%)"].apply(lambda x: f"{float(x):.2f}")
+                df_table_clean["VPD (kPa)"] = df_table_clean["VPD (kPa)"].apply(lambda x: f"{float(x):.2f}")
+                
+                # Áp dụng bộ màu nền trạng thái dựa trên cột phân loại
+                styled_df_file = df_table_clean.style.apply(style_status_rows, axis=1)
+                
+                # Đẩy bảng dữ liệu lên giao diện
                 st.dataframe(styled_df_file, use_container_width=True, hide_index=True, height=290)
                 
                 st.download_button(
@@ -409,7 +419,7 @@ with tab_past:
                     use_container_width=True
                 )
 
-            # --- BÁO CÁO PHÂN TÍCH THEO BUỔI ---
+            # --- BÁO CÁO PHÂN TÍCH TỔNG HỢP THEO BUỔI CHU KỲ ---
             st.markdown("---")
             st.markdown(f"##### 📊 BÁO CÁO PHÂN TÍCH TỔNG HỢP THEO BUỔI CHU KỲ (Dữ liệu gốc từ File)")
             
@@ -481,7 +491,7 @@ with tab_past:
                             file_tele_msg += f"▪️ VPD TB: *{r_data['VPD Trung Bình']}*\n"
                             file_tele_msg += f"▪️ Đánh giá: _{r_data['Đánh giá']}_\n"
                             file_tele_msg += f"▪️ Giải pháp: {r_data['Biện pháp kỹ thuật đề xuất']}\n"
-                            file_tele_msg += f"─" * 20 + "\n"
+                            file_tele_msg += f"────────────────────\n"
                             
                         file_tele_msg += f"\n📊 _Hệ thống phân tích tự động thông minh VPD Farm_"
                         success = send_telegram_message(TELE_TOKEN, TELE_CHAT_ID, file_tele_msg)
