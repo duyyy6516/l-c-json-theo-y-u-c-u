@@ -302,7 +302,23 @@ with tab_future:
             v_min, v_max = st.session_state.current_matrix[b_hien_tai]
             
             # 1. BIỂU ĐỒ BIẾN ĐỘNG VPD (Ở TRÊN CÙNG)
-            st.altair_chart(draw_vpd_chart(df_f, v_min, v_max), use_container_width=True)
+            # --- ĐOẠN UPDATE CHUẨN DÒNG 305 TRONG APP.PY ---
+
+# 1. Hiển thị dòng chú thích thông số dải màu bằng HTML/CSS (Đẹp, thông thoáng, không lo che khuất)
+st.markdown(
+    f"""
+    <div style="background-color: #F8F9F9; padding: 10px 14px; border-left: 4px solid #27AE60; border-radius: 4px; margin-bottom: 12px; font-size: 13px; color: #2C3E50; font-weight: bold;">
+        Cạn dưới: {v_min} kPa | Cạn trên: {v_max} kPa | Khoá dải màu Solid đậm | vạch dựng phân buổi
+    </div>
+    """, 
+    unsafe_allow_html=True
+)
+
+# 2. Render hệ thống màu cảnh báo bằng thanh khối màu trực quan Streamlit trước biểu đồ
+st.markdown("**🎨 Thanh dải màu trạng thái:** 🟢 *Lý Tưởng (Trong dải nét đứt)* | 🔵 *Ẩm* | 🟡 *Nóng*")
+
+# 3. Chạy biểu đồ VPD an toàn từ file charts.py
+st.altair_chart(draw_vpd_chart(df_f, v_min, v_max), use_container_width=True)
             
             # 2. BIỂU ĐỒ NHIỆT ĐỘ ĐỘ ẨM LỒNG VÀO NHAU (Ở NGAY PHÍA DƯỚI)
             st.altair_chart(draw_combined_temp_humidity_chart(df_f), use_container_width=True)
