@@ -238,7 +238,7 @@ with tab_future:
 
 
 # --------------------------------------------------------
-# 📁 TAB 2: UPLOAD & BULK FILE ANALYTICS (TÍCH HỢP TÍNH NĂNG CHỌN CÂY & GIỜ STRESS)
+# 📁 TAB 2: UPLOAD & BULK FILE ANALYTICS 
 # --------------------------------------------------------
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 19px;'>📁 TỰ ĐỘNG PHÂN TÍCH FILE IOT NHÀ KÍNH</h3>", unsafe_allow_html=True)
@@ -484,59 +484,39 @@ with tab_past:
                     
                     if avg_v < file_vpd_min:
                         conclusion = "⚠️ CHƯA ĐẠT (Quá ẩm)"
-                        reason = f"Độ ẩm không khí tích tụ cao ({avg_h}%), nhiệt độ mát ẩm làm khép khí khổng."
-                        solution = "Bật quạt đối lưu khí, tăng nhẹ sưởi ấm hoặc ngừng hệ thống tưới sương."
-                    elif avg_v > file_vpd_max:
-                        conclusion = "🚨 CHƯA ĐẠT (Quá khô)"
-                        reason = f"Nhiệt độ cao ({avg_t}°C) kết hợp độ ẩm tụt sâu ({avg_h}%), bốc thoát hơi quá nhanh."
-                        solution = "Kéo lưới cắt nắng sương, kích hoạt phun sương hạt mịn hoặc hệ thống tưới nhỏ giọt."
+                        reason = f"Độ ẩm không khí tích tụ cao ({avg_h}%), nhiệt độ mát ẩm làm giảm áp suất hơi nước khiến cây khó thoát hơi."
+                    elif avg_v <= file_vpd_max:
+                        conclusion = "✅ ĐẠT (Lý tưởng)"
+                        reason = f"Sự cân bằng hoàn hảo giữa nhiệt độ {avg_t}°C và độ ẩm {avg_h}%. Cây tối ưu quang hợp."
                     else:
-                        conclusion = "✅ LÝ TƯỞNG"
-                        reason = "Sự cân bằng tuyệt vời giữa nhiệt độ và ẩm độ, cây mở tối đa khí khổng để hấp thụ CO2 tốt nhất."
-                        solution = "Giữ vững cấu hình vận hành hiện tại, kiểm tra định kỳ sensor ổn định."
+                        conclusion = "🚨 CHƯA ĐẠT (Quá khô)"
+                        reason = f"Nhiệt độ cao ({avg_t}°C) kết hợp ẩm thấp làm bốc hơi mạnh, dễ gây bốc thoát hơi nước quá mức làm héo cây."
                         
                     block_report_rows.append({
-                        "Khoảng Buổi": idx, "Nhiệt độ TB": f"{avg_t} °C", "Độ ẩm TB": f"{avg_h} %",
-                        "VPD Trung Bình": f"{avg_v} kPa", "Đánh giá": conclusion,
-                        "Nguyên nhân cụ thể": reason, "Biện pháp kỹ thuật đề xuất": solution
+                        "Khoảng Thời Gian": idx,
+                        "Nhiệt độ TB (°C)": avg_t,
+                        "Độ ẩm TB (%)": avg_h,
+                        "VPD TB (kPa)": avg_v,
+                        "Đánh giá": conclusion,
+                        "Phân tích nguyên nhân": reason
                     })
                 
                 df_block_report = pd.DataFrame(block_report_rows)
-                styled_df_block = df_block_report.style.apply(lambda r: [
-                    'background-color: #E8F5E9; color: #1B5E20; font-weight: bold;' if "LÝ TƯỞNG" in str(r["Đánh giá"]) 
-                    else ('background-color: #FFEBEE; color: #B71C1C; font-weight: bold;' if "Quá khô" in str(r["Đánh giá"]) 
-                    else 'background-color: #E3F2FD; color: #0D47A1; font-weight: bold;')
-                    for _ in range(len(r))
-                ], axis=1)
                 
-                st.dataframe(styled_df_block, use_container_width=True, hide_index=True)
-                
-                st.write("")
-                if st.button("📤 Gửi báo cáo phân tích file qua Telegram", type="primary", key="btn_send_file_tele"):
-                    if TELE_TOKEN and TELE_CHAT_ID:
-                        file_tele_msg = f"📂 *BÁO CÁO PHÂN TÍCH TỪ FILE IoT THÀNH CÔNG*\n"
-                        file_tele_msg += f"📦 Tên file: `{uploaded_file.name}`\n"
-                        file_tele_msg += f"🎯 Mô hình áp dụng: *{file_plant_option}* ({file_vpd_min}-{file_vpd_max} kPa)\n"
-                        file_tele_msg += f"⏱️ Chế độ xem: _{time_filter_option}_\n"
-                        file_tele_msg += f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                        
-                        for _, r_data in df_block_report.iterrows():
-                            icon_status = "🟩" if "LÝ TƯỞNG" in r_data["Đánh giá"] else ("🟦" if "Quá ẩm" in r_data["Đánh giá"] else "🟥")
-                            file_tele_msg += f"{icon_status} *{r_data['Khoảng Buổi']}*\n"
-                            file_tele_msg += f"▪️ Môi trường: {r_data['Nhiệt độ TB']} | {r_data['Độ ẩm TB']}\n"
-                            file_tele_msg += f"▪️ VPD TB: *{r_data['VPD Trung Bình']}*\n"
-                            file_tele_msg += f"▪️ Đánh giá: _{r_data['Đánh giá']}_\n"
-                            file_tele_msg += f"▪️ Giải pháp: {r_data['Biện pháp kỹ thuật đề xuất']}\n"
-                            file_tele_msg += f"────────────────────\n"
-                            
-                        file_tele_msg += f"\n📊 _Hệ thống phân tích tự động thông minh VPD Farm_"
-                        success = send_telegram_message(TELE_TOKEN, TELE_CHAT_ID, file_tele_msg)
-                        if success: st.success("✅ Đã gửi toàn bộ dữ liệu báo cáo file qua Telegram thành công!")
-                        else: st.error("❌ Không thể gửi tin nhắn. Vui lòng kiểm tra lại cấu hình kết nối mạng.")
-            else:
-                st.info("Chưa có đủ mốc thời gian thích hợp để phân tích chu kỳ buổi.")
+                def style_block_rows(row):
+                    styles = [''] * len(row)
+                    eval_val = str(row['Đánh giá'])
+                    if "Lý tưởng" in eval_val or "✅" in eval_val:
+                        styles[row.index.get_loc('Đánh giá')] = 'background-color: #E8F5E9; color: #1B5E20; font-weight: bold;'
+                    elif "Quá khô" in eval_val or "🚨" in eval_val:
+                        styles[row.index.get_loc('Đánh giá')] = 'background-color: #FFEBEE; color: #B71C1C; font-weight: bold;'
+                    elif "Quá ẩm" in eval_val or "⚠️" in eval_val:
+                        styles[row.index.get_loc('Đánh giá')] = 'background-color: #E3F2FD; color: #0D47A1; font-weight: bold;'
+                    return styles
 
-        except Exception as err:
-            st.error(f"❌ Không thể xử lý file. Chi tiết lỗi: {err}")
-    else:
-        st.info("💡 Hệ thống tự động bóc tách dữ liệu thông minh: Vui lòng kéo thả file dữ liệu nhà kính của bạn vào ô phía trên để bắt đầu phân tích chu kỳ chuyên sâu.")
+                styled_block_df = df_block_report.style.apply(style_block_rows, axis=1)
+                st.dataframe(styled_block_df, use_container_width=True, hide_index=True)
+            else:
+                st.warning("Không thể phân tích dữ liệu theo buổi do cấu trúc file không hợp lệ hoặc bị trống.")
+        except Exception as e:
+            st.error(f"❌ Có lỗi xảy ra trong quá trình xử lý file: {str(e)}")
