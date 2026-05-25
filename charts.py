@@ -9,7 +9,6 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
     if df.empty:
         return alt.Chart(pd.DataFrame()).mark_text().properties(title="Chưa có dữ liệu đồ thị")
 
-    # Sao chép dataframe tránh ghi đè dữ liệu gốc
     df_chart = df.copy()
 
     # 1. ĐỊNH NGHĨA KHÚC BUỔI CHO TỪNG ĐIỂM DỮ LIỆU (Trục X)
@@ -58,7 +57,6 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
     rules = alt.Chart(rules_data).mark_rule(stroke="#17202A", strokeDash=[4, 3], strokeWidth=1.5).encode(y='y:Q')
 
     # Lớp 3: Đường Line nối các điểm dữ liệu thực tế xuyên qua các khúc Sáng - Trưa - Chiều - Tối
-    # Trục X bây giờ sẽ nhóm theo "Khúc Buổi" trước, sau đó mới chi tiết đến "Hiển thị Giờ"
     line = alt.Chart(df_chart).mark_line(
         point=alt.OverlayMarkDef(color="#FFFFFF", size=65, filled=True, stroke="#17202A", strokeWidth=1.5), 
         color="#FFFFFF", 
@@ -73,9 +71,8 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
         tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)', 'Độ ẩm (%)', 'VPD (kPa)', 'Trạng thái']
     )
 
-    # Gộp cấu trúc ma trận đa cột (Mỗi cột là một khúc buổi)
     chart = alt.layer(background, rules, line, data=df_chart).properties(
-        width=160, # Độ rộng của mỗi khúc buổi khi đứng cạnh nhau
+        width=150, 
         height=380,
         title=alt.TitleParams(
             text="MA TRẬN ĐỐI CHIẾU PHÂN KHÚC THỜI GIAN THEO BUỔI",
@@ -93,7 +90,7 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
         titleFontSize=12
     ).configure_view(
         strokeWidth=1,
-        stroke="#BDC3C7" # Tạo viền mảnh ngăn cách giữa các hộp Sáng/Trưa/Chiều/Tối
+        stroke="#BDC3C7" 
     )
 
     return chart
