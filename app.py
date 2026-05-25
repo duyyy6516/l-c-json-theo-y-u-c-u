@@ -41,7 +41,6 @@ if 'history' not in st.session_state: st.session_state.history = []
 if 'stt_counter' not in st.session_state: st.session_state.stt_counter = 0 
 if 'simulated_time' not in st.session_state: st.session_state.simulated_time = "2026-05-24 07:00:00"
 
-# Các preset mẫu ban đầu (Vẫn cho phép người dùng tinh chỉnh tự do sau khi chọn)
 PLANT_PRESETS = {
     "🍓 Dâu tây Đà Lạt (Giai đoạn trái)": {
         "🌅 Sáng (05h-10h)": (0.5, 0.9), "☀️ Trưa (10h-15h)": (0.7, 1.2), 
@@ -60,7 +59,6 @@ PLANT_PRESETS = {
 if 'current_matrix' not in st.session_state:
     st.session_state.current_matrix = PLANT_PRESETS["🍓 Dâu tây Đà Lạt (Giai đoạn trái)"].copy()
 
-# Đồng bộ dữ liệu ma trận khi người dùng đổi loại cây mẫu trên giao diện
 if 'prev_preset' not in st.session_state:
     st.session_state.prev_preset = "🍓 Dâu tây Đà Lạt (Giai đoạn trái)"
 
@@ -86,24 +84,27 @@ def trigger_new_data(plant_matrix):
     buoi_hien_tai = get_biological_block(current_sim_datetime.hour)
     v_min, v_max = plant_matrix[buoi_hien_tai]
     
-    # Phân loại trạng thái hiện tại
+    # 1. Xác định trạng thái chính xác của VPD
     if new_vpd >= v_max + 0.5: status_text = "🔴 Quá Nóng"
     elif new_vpd > v_max: status_text = "💛 Nóng"
     elif new_vpd < v_min - 0.2: status_text = "🔵 Quá Ẩm"
     elif new_vpd < v_min: status_text = "🌐 Ẩm"
     else: status_text = "🟩 Lý Tưởng"
     
-    # --- THUẬT TOÁN PHÁT HIỆN SẮP QUÁ NÓNG / SẮP QUÁ ẨM (TIÊN ĐOÁN TRƯỚC 0.1 kPa) ---
+    # 2. Thuật toán quét điều kiện cảnh báo sớm (Cách ranh giới nguy hiểm 0.1 kPa)
     warning_prefix = ""
+    is_near_danger = False
+    
     if v_max < new_vpd < v_max + 0.5:
-        # Nằm trong dải Nóng nhưng chỉ cách Quá Nóng chưa đầy 0.1 kPa
         if (v_max + 0.5) - new_vpd <= 0.1:
-            warning_prefix = "⚠️ [CẢNH BÁO SỚM]: VPD đang tăng nhanh, SẮP CHẠM NGƯỠNG QUÁ NÓNG NGUY HIỂM! Nguy cơ cháy lá kề cận!\n"
+            warning_prefix = "⚠️ [CẢNH BÁO SỚM]: VPD tăng nhanh, SẮP CHẠM NGƯỠNG QUÁ NÓNG NGUY HIỂM!\n"
+            is_near_danger = True
     elif v_min - 0.2 < new_vpd < v_min:
-        # Nằm trong dải Ẩm nhưng chỉ cách Quá Ẩm chưa đầy 0.1 kPa
         if new_vpd - (v_min - 0.2) <= 0.1:
-            warning_prefix = "⚠️ [CẢNH BÁO SỚM]: Môi trường tích tụ nước, SẮP CHẠM NGƯỠNG QUÁ ẨM ĐỌNG SƯƠNG! Rủi ro nấm bệnh cực cao!\n"
+            warning_prefix = "⚠️ [CẢNH BÁO SỚM]: Môi trường tích tụ nước, SẮP CHẠM NGƯỠNG QUÁ ẨM ĐỌNG SƯƠNG!\n"
+            is_near_danger = True
 
+    # Thêm bản ghi mới vào lịch sử hiển thị trên giao diện Web
     st.session_state.history.insert(0, {
         "STT": st.session_state.stt_counter, "Ngày": current_date_str,
         "Thời gian mô phỏng": current_sim_datetime, "Hiển thị Giờ": current_sim_datetime.strftime("%H:%M"),
@@ -111,18 +112,19 @@ def trigger_new_data(plant_matrix):
         "VPD (kPa)": round(new_vpd, 2), "Trạng thái": status_text
     })
 
+    # 3. LOGIC GỬI LỌC TELEGRAM CHỌN LỌC: Chỉ gửi khi KHÔNG phải Lý Tưởng HOẶC khi sắp có biến cố nguy hiểm
     if TELE_TOKEN and TELE_CHAT_ID:
-        unique_days = sorted(list(set([r["Ngày"] for r in st.session_state.history])), reverse=True)
-        h_latest = [r for r in st.session_state.history if r["Ngày"] == (unique_days[0] if unique_days else current_date_str)]
-        trend, trend_type = predict_vpd_trend_v3(h_latest, current_sim_datetime.hour, plant_matrix)
-        
-        # Đóng gói chuỗi tin nhắn có chèn header cảnh báo sớm nếu thỏa điều kiện
-        msg = (f"{warning_prefix}"
-               f"🌿 *VPD MONITOR LIỀN MẠCH VẠCH DỌC*\n⏰ {current_date_str} - {current_sim_datetime.strftime('%H:%M')} ({buoi_hien_tai})\n"
-               f"📊 Môi trường: {st.session_state.temp}°C | {st.session_state.rh}%\n"
-               f"*VPD thực tế:* *{new_vpd:.2f} kPa* (Cận lý tưởng cấu hình: {v_min}-{v_max} kPa)\n"
-               f"📢 *Hiện trạng:* {status_text}\n🔮 *Dự báo xu hướng:* _{trend}_")
-        send_telegram_message(TELE_TOKEN, TELE_CHAT_ID, msg)
+        if status_text != "🟩 Lý Tưởng" or is_near_danger:
+            unique_days = sorted(list(set([r["Ngày"] for r in st.session_state.history])), reverse=True)
+            h_latest = [r for r in st.session_state.history if r["Ngày"] == (unique_days[0] if unique_days else current_date_str)]
+            trend, trend_type = predict_vpd_trend_v3(h_latest, current_sim_datetime.hour, plant_matrix)
+            
+            msg = (f"{warning_prefix}"
+                   f"🌿 *VPD SMART ALARM (PHÁT HIỆN BẤT THƯỜNG)*\n⏰ {current_date_str} - {current_sim_datetime.strftime('%H:%M')} ({buoi_hien_tai})\n"
+                   f"📊 Môi trường: {st.session_state.temp}°C | {st.session_state.rh}%\n"
+                   f"*VPD thực tế:* *{new_vpd:.2f} kPa* (Ngưỡng an toàn bạn đặt: {v_min}-{v_max} kPa)\n"
+                   f"📢 *Hiện trạng:* {status_text}\n🔮 *Dự báo:* _{trend}_")
+            send_telegram_message(TELE_TOKEN, TELE_CHAT_ID, msg)
     
     next_dt = current_sim_datetime + timedelta(minutes=10)
     if next_dt.hour == 0 and next_dt.minute == 0:
@@ -137,12 +139,10 @@ with tab_future:
         st.markdown("<h3 style='color: #1E8449; font-size: 17px;'>📋 CẤU HÌNH MA TRẬN VPD THEO BUỔI</h3>", unsafe_allow_html=True)
         preset_choice = st.selectbox("Chọn giống cây áp ma trận mẫu:", list(PLANT_PRESETS.keys()) + ["🛠️ Tùy chỉnh thủ công toàn bộ"])
         
-        # Nếu người dùng thay đổi loại cây, cập nhật ngay giá trị mặc định của cây đó vào session_state
         if preset_choice != "🛠️ Tùy chỉnh thủ công toàn bộ" and preset_choice != st.session_state.prev_preset:
             st.session_state.current_matrix = PLANT_PRESETS[preset_choice].copy()
             st.session_state.prev_preset = preset_choice
 
-        # KHÔNG khóa cứng (disabled=False), cho phép tùy biến thông số trực tiếp trên nền cây đã chọn
         with st.container(border=True):
             st.caption("💡 Mẹo: Bạn có thể kéo Slider dưới đây để thay đổi trực tiếp dải VPD tối ưu phù hợp cho loại trái cây của riêng mình.")
             m_sáng = st.slider("🌅 Sáng (05h-10h):", 0.0, 3.0, st.session_state.current_matrix["🌅 Sáng (05h-10h)"], 0.1)
