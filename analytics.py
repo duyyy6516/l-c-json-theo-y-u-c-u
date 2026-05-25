@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 
 def get_biological_block(hour):
-    """Phân chia buổi sinh học dựa trên đồng hồ sinh học của cây trồng"""
     if 5 <= hour < 10: return "🌅 Sáng (05h - 10h)"
     elif 10 <= hour < 15: return "☀️ Trưa (10h - 15h)"
     elif 15 <= hour < 19: return "🌇 Chiều (15h - 19h)"
@@ -10,14 +9,12 @@ def get_biological_block(hour):
     else: return "🌙 Khuya (23h - 05h)"
 
 def calculate_dew_point(temp, rh):
-    """Tính điểm đọng sương (Dew Point) bằng công thức Magnus-Tetens"""
     a = 17.27
     b = 237.7
     alpha = ((a * temp) / (b + temp)) + np.log(rh / 100.0)
     return round((b * alpha) / (a - alpha), 2)
 
 def predict_vpd_trend_v3(history_data, current_hour, plant_matrix):
-    """Dự báo xu hướng toán học dựa trên dải VPD của từng Buổi cụ thể"""
     if not history_data or len(history_data) < 3:
         return "📊 Hệ thống đang tích lũy thêm chu kỳ dữ liệu...", "normal"
     try:
@@ -32,14 +29,14 @@ def predict_vpd_trend_v3(history_data, current_hour, plant_matrix):
         diff_2 = v2 - v3
         
         if abs(diff_1) < 0.005 and abs(diff_2) < 0.005:
-            if v1 >= vpd_max + 0.5: return "🟥 CẢNH BÁO: Trạng thái QUÁ NÓNG đang bị kẹt kéo dài. Nguy cơ cháy lá cực cao!", "danger_red"
-            elif v1 < vpd_min - 0.2: return "🟦 CẢNH BÁO: Trạng thái QUÁ ẨM đang đứng im lâu ngày. Bật quạt đối lưu gấp!", "danger_blue"
-            elif vpd_min <= v1 <= vpd_max: return "🟩 Xu hướng: Chỉ số VPD đang duy trì đi ngang rất ổn định trong dải lý tưởng.", "normal"
+            if v1 >= vpd_max + 0.5: return "🟥 CẢNH BÁO: Trạng thái QUÁ NÓNG kéo dài. Nguy cơ cháy lá cực cao!", "danger_red"
+            elif v1 < vpd_min - 0.2: return "🟦 CẢNH BÁO: Trạng thái QUÁ ẨM đứng im lâu ngày. Bật quạt đối lưu gấp!", "danger_blue"
+            elif vpd_min <= v1 <= vpd_max: return "🟩 Xu hướng: Chỉ số VPD đang duy trì đi ngang ổn định trong dải lý tưởng.", "normal"
             else: return "🔄 Xu hướng: Chỉ số ít biến động nhưng nằm ngoài dải an toàn tối ưu.", "normal"
             
         slope = (diff_1 + diff_2) / 2.0
         
-        if v1 >= vpd_max + 0.5 and slope > 0.02: return "🚨 [CẢNH BÁO ĐỎ] Đã chạm ngưỡng QUÁ NÓNG và đang tiếp tục tăng khô gắt bốc hơi!", "danger_red"
+        if v1 >= vpd_max + 0.5 and slope > 0.02: return "🚨 [CẢNH BÁO ĐỎ] Đã chạm ngưỡng QUÁ NÓNG và đang tiếp tục tăng khô gắt!", "danger_red"
         if v1 < vpd_min - 0.2 and slope < -0.02: return "🚨 [CẢNH BÁO ĐỎ] Đã chạm ngưỡng QUÁ ẨM và đang tiếp tục tụt sâu đọng sương!", "danger_blue"
         
         if slope > 0.04: return "📈 Xu hướng: Chỉ số VPD đang tăng (Khí hậu nóng khô dần).", "normal"
@@ -49,7 +46,6 @@ def predict_vpd_trend_v3(history_data, current_hour, plant_matrix):
         return "🔄 Chỉ số xu hướng đang được chuẩn hóa toán học...", "normal"
 
 def calculate_plant_stress_hours(df_data, plant_matrix, mode_filter):
-    """Tính toán giờ Stress Khô / Ẩm tích lũy đối chiếu linh hoạt theo buổi sinh học"""
     if df_data.empty or "VPD (kPa)" not in df_data.columns:
         return {"dry_hours": 0.0, "wet_hours": 0.0, "fungus_risk": 0}
     
@@ -91,7 +87,6 @@ def calculate_plant_stress_hours(df_data, plant_matrix, mode_filter):
     return {"dry_hours": dry_hours, "wet_hours": wet_hours, "fungus_risk": fungus_risk_pct}
 
 def analyze_day_by_blocks_rt(history_list, plant_matrix, target_day_str):
-    """Phân tích báo cáo chu kỳ buổi đối chiếu trực tiếp với ma trận 5 trạng thái"""
     if not history_list: return pd.DataFrame()
     df = pd.DataFrame(history_list)
     df_filtered = df[df["Ngày"] == target_day_str].copy()
@@ -114,13 +109,13 @@ def analyze_day_by_blocks_rt(history_list, plant_matrix, target_day_str):
             status = "🔴 Quá Nóng"
             sol = "Xả rèm đỉnh, phun sương hạt mịn công suất tối đa, bật quạt hút nhiệt."
         elif avg_v > vpd_max:
-            status = "🟠 Nóng"
+            status = "💛 Nóng"
             sol = "Kéo lưới cắt nắng, kích hoạt nhẹ phun sương giữ ẩm."
         elif avg_v < vpd_min - 0.2:
-            status = "💙 Quá Ẩm"
+            status = "🔵 Quá Ẩm"
             sol = "Bật toàn bộ hệ thống quạt đối lưu, kích hoạt sưởi nhẹ nếu có."
         elif avg_v < vpd_min:
-            status = "🔵 Ẩm"
+            status = "🌐 Ẩm"
             sol = "Mở bớt rèm hông nhà kính để lưu thông khí tự nhiên."
         else:
             status = "🟩 Lý Tưởng"
