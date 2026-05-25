@@ -226,7 +226,7 @@ with tab_future:
 
 
 # --------------------------------------------------------
-# 📁 TAB 2: UPLOAD & BULK FILE ANALYTICS (TỰ ĐỘNG CHUẨN HÓA KHI TRÊN 2 NGÀY)
+# 📁 TAB 2: UPLOAD & BULK FILE ANALYTICS (BỔ SUNG CHẾ ĐỘ LỌC KHOẢNG NGÀY TIẾP DIỄN)
 # --------------------------------------------------------
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 19px;'>📁 TỰ ĐỘNG PHÂN TÍCH FILE IOT NHÀ KÍNH</h3>", unsafe_allow_html=True)
@@ -252,7 +252,15 @@ with tab_past:
             uploaded_file = st.file_uploader("Kéo thả file IoT (JSON, CSV, hoặc Excel) vào đây:", type=["json", "csv", "xlsx"], label_visibility="collapsed")
             time_filter_option = st.selectbox(
                 "📆 Chế độ lọc và gộp dữ liệu chu kỳ:",
-                ["📊 Xem toàn bộ dữ liệu gốc của File", "📆 Tự chọn một ngày cụ thể trên lịch", "⏱️ 1 Ngày gần nhất (Gom trung bình 10 phút)", "📅 1 Tuần gần nhất (Gộp trung bình 1 Ngày / 1 Điểm)", "🗓️ 1 Tháng gần nhất (Gộp trung bình 1 Ngày / 1 Điểm)"]
+                [
+                    "📊 Xem toàn bộ dữ liệu gốc của File", 
+                    "📆 Tự chọn một ngày cụ thể trên lịch", 
+                    "🗓️ Chọn 1 tháng (Từ ngày chỉ định + 29 ngày tiếp theo)",
+                    "📅 Chọn 1 tuần (Từ ngày chỉ định + 6 ngày tiếp theo)",
+                    "⏱️ 1 Ngày gần nhất (Gom trung bình 10 phút)", 
+                    "📅 1 Tuần gần nhất (Gộp trung bình 1 Ngày / 1 Điểm)", 
+                    "🗓️ 1 Tháng gần nhất (Gộp trung bình 1 Ngày / 1 Điểm)"
+                ]
             )
     
     if uploaded_file:
@@ -301,27 +309,35 @@ with tab_past:
             df_raw_calc = pd.DataFrame()
             df_raw_calc["datetime_internal"] = raw_datetimes
             
-            # Đọc chuỗi số nhiệt độ thô từ file
             raw_temp_series = pd.to_numeric(df_upload[col_temp], errors='coerce')
-            # Nếu điểm số dữ liệu lớn hơn hoặc bằng 45 độ C (Thường do cảm biến lỗi chưa chia 10), tiến hành tự động dọn sạch
             df_raw_calc["Nhiệt độ (°C)"] = raw_temp_series.apply(lambda x: x / 10.0 if pd.notna(x) and x >= 45.0 else x)
             
             df_raw_calc["Độ ẩm (%)"] = pd.to_numeric(df_upload[col_rh], errors='coerce').apply(lambda x: x / 100.0 if pd.notna(x) and x > 100.0 else x)
             df_raw_calc = df_raw_calc[df_raw_calc["Độ ẩm (%)"] > 1.0].dropna(subset=["Nhiệt độ (°C)", "Độ ẩm (%)"]).sort_values("datetime_internal")
 
             if len(df_raw_calc) > 0:
-                # Bước tính toán sẵn chỉ số VPD gốc cho từng bản ghi nhỏ trước khi xử lý gộp nhóm
                 df_raw_calc["VPD_raw"] = df_raw_calc.apply(lambda row: calculate_vpd(row["Nhiệt độ (°C)"], row["Độ ẩm (%)"]), axis=1)
-                
                 df_raw_calc["only_date"] = df_raw_calc["datetime_internal"].dt.date
                 available_dates = sorted(df_raw_calc["only_date"].unique())
                 
+                # --- LOGIC XỬ LÝ CÁC LỰA CHỌN BỘ LỌC KHOẢNG THỜI GIAN THEO YÊU CẦU ---
                 if "Tự chọn một ngày cụ thể" in time_filter_option:
                     selected_date = st.date_input("👇 Chọn ngày trích xuất dữ liệu trên lịch:", value=available_dates[-1] if available_dates else datetime.now().date())
                     df_raw_calc = df_raw_calc[df_raw_calc["only_date"] == selected_date]
+                    
+                elif "Từ ngày chỉ định + 29 ngày tiếp theo" in time_filter_option:
+                    start_date = st.date_input("👇 Chọn ngày bắt đầu chu kỳ (Hệ thống tự động lấy thêm 29 ngày kế tiếp):", value=available_dates[0] if available_dates else datetime.now().date())
+                    end_date = start_date + timedelta(days=29)
+                    df_raw_calc = df_raw_calc[(df_raw_calc["only_date"] >= start_date) & (df_raw_calc["only_date"] <= end_date)]
+                    
+                elif "Từ ngày chỉ định + 6 ngày tiếp theo" in time_filter_option:
+                    start_date = st.date_input("👇 Chọn ngày bắt đầu chu kỳ (Hệ thống tự động lấy thêm 6 ngày kế tiếp):", value=available_dates[0] if available_dates else datetime.now().date())
+                    end_date = start_date + timedelta(days=6)
+                    df_raw_calc = df_raw_calc[(df_raw_calc["only_date"] >= start_date) & (df_raw_calc["only_date"] <= end_date)]
+                    
                 else:
                     max_time_in_file = df_raw_calc["datetime_internal"].max()
-                    if "1 Ngày gần nhất" in time_filter_option:
+                    if "1 Day gần nhất" in time_filter_option or "1 Ngày gần nhất" in time_filter_option:
                         df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= (max_time_in_file - timedelta(days=1))]
                     elif "1 Tuần gần nhất" in time_filter_option:
                         df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= (max_time_in_file - timedelta(days=7))]
@@ -331,13 +347,13 @@ with tab_past:
             df_for_block_analysis = df_raw_calc.copy()
 
             if len(df_raw_calc) > 0:
-                # Lưu số lượng ngày thực tế sau bộ lọc chu kỳ
                 unique_days_filtered = df_raw_calc["only_date"].nunique()
                 
                 df_resample_input = df_raw_calc[["datetime_internal", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD_raw"]].copy()
                 df_resample_input.set_index("datetime_internal", inplace=True)
                 
-                if any(k in time_filter_option for k in ["1 Tuần gần nhất", "1 Tháng gần nhất"]):
+                # Gom gộp theo ngày đối với các chế độ xem nhiều ngày (> 2 ngày) để biểu đồ mượt mà không rối mắt
+                if any(k in time_filter_option for k in ["1 Tuần gần nhất", "1 Tháng gần nhất", "tiếp theo"]):
                     df_resampled = df_resample_input.resample("1D").mean().dropna()
                 elif "1 Ngày gần nhất" in time_filter_option:
                     df_resampled = df_resample_input.resample("10min").mean().dropna()
@@ -345,7 +361,7 @@ with tab_past:
                     df_resampled = df_resample_input.copy()
                 
                 df_resampled["datetime_internal"] = df_resampled.index
-                if any(k in time_filter_option for k in ["1 Tuần gần nhất", "1 Tháng gần nhất"]):
+                if any(k in time_filter_option for k in ["1 Tuần gần nhất", "1 Tháng gần nhất", "tiếp theo"]):
                     df_resampled["Hiển thị Giờ"] = df_resampled["datetime_internal"].dt.strftime("%d/%m")
                 else:
                     df_resampled["Hiển thị Giờ"] = df_resampled["datetime_internal"].dt.strftime("%H:%M")
@@ -360,9 +376,6 @@ with tab_past:
             df_processed["Độ ẩm (%)"] = df_resampled["Độ ẩm (%)"].round(2)
             df_processed["Hiển thị Giờ"] = df_resampled["Hiển thị Giờ"]
             
-            # ĐIỀU KIỆN LOGIC KHẮC PHỤC LỖI ĐỘT BIẾN VPD KHI XEM TRÊN 2 NGÀY:
-            # Nếu tập dữ liệu lọc ra lớn hơn 2 ngày (> 2): Lấy trực tiếp cột VPD trung bình làm mịn (VPD_raw).
-            # Ngược lại nếu nhỏ hơn hoặc bằng 2 ngày: Tính trực tiếp cơ học cơ bản từ cặp giá trị gốc.
             if unique_days_filtered > 2:
                 df_processed["VPD (kPa)"] = df_resampled["VPD_raw"].round(2)
             else:
@@ -394,21 +407,17 @@ with tab_past:
                 with file_sub_tab3: st.altair_chart(draw_humidity_chart(df_processed), use_container_width=True)
                 with file_sub_tab4: st.altair_chart(draw_combined_chart(df_processed), use_container_width=True)
                 
-            # --- BẢNG NHẬT KÝ THEO DÕI ĐIỂM GỘP CHU KỲ (ĐÃ SỬA LỖI CHUỖI SỐ DƯ THỪA TRONG FLOATING-POINT) ---
+            # --- BẢNG NHẬT KÝ THEO DÕI ĐIỂM GỘP CHU KỲ (TRIỆT TIÊU CHUỖI SỐ DƯ THỪA) ---
             with res_right:
                 st.markdown("<div style='font-weight:bold; color:#1A5276; margin-bottom:5px;'>📋 BẢNG NHẬT KÝ THEO DÕI ĐIỂM GỘP CHU KỲ</div>", unsafe_allow_html=True)
                 preview_cols = ["Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]
                 
-                # Tạo bản sao sạch sẽ để ép buộc định dạng hiển thị chuỗi số thập phân gọn gàng (.2f)
                 df_table_clean = df_processed[preview_cols].copy()
                 df_table_clean["Nhiệt độ (°C)"] = df_table_clean["Nhiệt độ (°C)"].apply(lambda x: f"{float(x):.2f}")
                 df_table_clean["Độ ẩm (%)"] = df_table_clean["Độ ẩm (%)"].apply(lambda x: f"{float(x):.2f}")
                 df_table_clean["VPD (kPa)"] = df_table_clean["VPD (kPa)"].apply(lambda x: f"{float(x):.2f}")
                 
-                # Áp dụng bộ màu nền trạng thái dựa trên cột phân loại
                 styled_df_file = df_table_clean.style.apply(style_status_rows, axis=1)
-                
-                # Đẩy bảng dữ liệu lên giao diện
                 st.dataframe(styled_df_file, use_container_width=True, hide_index=True, height=290)
                 
                 st.download_button(
