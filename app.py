@@ -12,7 +12,7 @@ from analytics import (
     calculate_dew_point, 
     get_biological_block
 )
-from charts import draw_temperature_chart, draw_humidity_chart, draw_vpd_chart
+from charts import draw_vpd_chart, draw_combined_temp_humidity_chart
 
 TELE_TOKEN = "8917951413:AAE6LKUEfYEYiQrFWGoKsQn0tumZc_XbcHg"
 TELE_CHAT_ID = "7290661009"
@@ -208,16 +208,18 @@ with tab_future:
             
             m_tab1, m_tab2 = st.tabs(["📈 Đồ thị biến động liền mạch", "📋 Bảng nhật ký chi tiết"])
             with m_tab1:
+                # 1. Biểu đồ chỉ số VPD chính
                 st.altair_chart(draw_vpd_chart(df_f, v_min, v_max), use_container_width=True)
                 
-                # --- ĐOẠN CODE MỚI THÊM BẢNG CHIA BUỔI ĐÁNH GIÁ CHUNG REALTIME ---
+                # 2. Biểu đồ Nhiệt - Ẩm lồng nhau đặt ngay bên dưới biểu đồ VPD
+                st.altair_chart(draw_combined_temp_humidity_chart(df_f), use_container_width=True)
+                
                 st.markdown("##### 📝 BẢNG ĐÁNH GIÁ CHUNG THEO CÁC BUỔI TRONG NGÀY (REALTIME)")
                 df_rt_report = analyze_day_by_blocks_rt(st.session_state.history, st.session_state.current_matrix, sel_day)
                 if not df_rt_report.empty:
                     st.dataframe(df_rt_report, use_container_width=True, hide_index=True)
                 else:
                     st.info("Chưa có đủ điểm dữ liệu để tổng hợp báo cáo các buổi.")
-                # ----------------------------------------------------------------
                 
             with m_tab2:
                 st.dataframe(df_f[["STT", "Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]].style.apply(style_status_rows, axis=1), use_container_width=True, hide_index=True)
@@ -391,12 +393,11 @@ with tab_past:
             res_left, res_right = st.columns([6.2, 3.8])
             with res_left:
                 st.markdown("<div style='font-weight:bold; color:#114B72; margin-bottom:5px;'>📈 CÁC BIỂU ĐỒ ĐỐI CHIẾU TRỰC QUAN</div>", unsafe_allow_html=True)
-                f_tab1, f_tab2, f_tab3 = st.tabs(["🎯 Chỉ số VPD", "🌡️ Nhiệt độ khí", "💧 Độ ẩm khí"])
+                f_tab1, f_tab2 = st.tabs(["🎯 Chỉ số VPD", "🌡️💧 Cặp Nhiệt độ & Độ ẩm lồng nhau"])
                 
                 f_min_sample, f_max_sample = file_matrix["🌅 Sáng (05h-10h)"]
                 with f_tab1: st.altair_chart(draw_vpd_chart(df_processed, f_min_sample, f_max_sample), use_container_width=True)
-                with f_tab2: st.altair_chart(draw_temperature_chart(df_processed), use_container_width=True)
-                with f_tab3: st.altair_chart(draw_humidity_chart(df_processed), use_container_width=True)
+                with f_tab2: st.altair_chart(draw_combined_temp_humidity_chart(df_processed), use_container_width=True)
             with res_right:
                 st.markdown("<div style='font-weight:bold; color:#114B72; margin-bottom:5px;'>📋 NHẬT KÝ ĐIỂM GỘP CHU KỲ CHUYÊN SÂU</div>", unsafe_allow_html=True)
                 preview_cols = ["Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]
