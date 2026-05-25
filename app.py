@@ -91,20 +91,39 @@ def trigger_new_data(plant_matrix):
     elif new_vpd < v_min: status_text = "🌐 Ẩm"
     else: status_text = "🟩 Lý Tưởng"
     
-    # 2. Thuật toán quét điều kiện cảnh báo sớm (Cách ranh giới nguy hiểm 0.1 kPa)
+    # 2. Thuật toán phân tích nguyên nhân cốt lõi (Nhiệt độ vs Độ ẩm)
+    reason_text = ""
+    if "Nóng" in status_text:
+        # Nếu nhiệt độ vượt ngưỡng trung bình trưa gắt (vùng nguy hiểm 28°C) hoặc ẩm tụt sâu dưới 50%
+        if st.session_state.temp > 28.0 and st.session_state.rh >= 50.0:
+            reason_text = "🔥 Nguyên nhân: Do Nhiệt độ môi trường tăng quá cao!"
+        elif st.session_state.rh < 50.0 and st.session_state.temp <= 28.0:
+            reason_text = "🌵 Nguyên nhân: Do Độ ẩm không khí tụt quá thấp (Hanh khô)!"
+        else:
+            reason_text = "💥 Nguyên nhân kép: Nhiệt độ tăng cao kết hợp Không khí khô gắt!"
+            
+    elif "Ẩm" in status_text:
+        if st.session_state.rh > 85.0 and st.session_state.temp >= 16.0:
+            reason_text = "🌧️ Nguyên nhân: Do Độ ẩm không khí bão hòa quá cao!"
+        elif st.session_state.temp < 16.0 and st.session_state.rh <= 85.0:
+            reason_text = "🥶 Nguyên nhân: Do Nhiệt độ tụt quá thấp (Không khí co lại tụ nước)!"
+        else:
+            reason_text = "🌫️ Nguyên nhân kép: Trời lạnh sâu kèm Độ ẩm tích tụ bão hòa!"
+
+    # 3. Quét điều kiện cảnh báo sớm (Cách ranh giới nguy hiểm 0.1 kPa)
     warning_prefix = ""
     is_near_danger = False
     
     if v_max < new_vpd < v_max + 0.5:
         if (v_max + 0.5) - new_vpd <= 0.1:
-            warning_prefix = "⚠️ [CẢNH BÁO SỚM]: VPD tăng nhanh, SẮP CHẠM NGƯỠNG QUÁ NÓNG NGUY HIỂM!\n"
+            warning_prefix = f"⚠️ [CẢNH BÁO SỚM]: VPD tăng nhanh, SẮP CHẠM NGƯỠNG QUÁ NÓNG NGUY HIỂM!\n💡 {reason_text}\n"
             is_near_danger = True
     elif v_min - 0.2 < new_vpd < v_min:
         if new_vpd - (v_min - 0.2) <= 0.1:
-            warning_prefix = "⚠️ [CẢNH BÁO SỚM]: Môi trường tích tụ nước, SẮP CHẠM NGƯỠNG QUÁ ẨM ĐỌNG SƯƠNG!\n"
+            warning_prefix = f"⚠️ [CẢNH BÁO SỚM]: Môi trường tích tụ nước, SẮP CHẠM NGƯỠNG QUÁ ẨM ĐỌNG SƯƠNG!\n💡 {reason_text}\n"
             is_near_danger = True
 
-    # Thêm bản ghi mới vào lịch sử hiển thị trên giao diện Web
+    # Lưu lịch sử hiển thị giao diện Web
     st.session_state.history.insert(0, {
         "STT": st.session_state.stt_counter, "Ngày": current_date_str,
         "Thời gian mô phỏng": current_sim_datetime, "Hiển thị Giờ": current_sim_datetime.strftime("%H:%M"),
@@ -112,18 +131,21 @@ def trigger_new_data(plant_matrix):
         "VPD (kPa)": round(new_vpd, 2), "Trạng thái": status_text
     })
 
-    # 3. LOGIC GỬI LỌC TELEGRAM CHỌN LỌC: Chỉ gửi khi KHÔNG phải Lý Tưởng HOẶC khi sắp có biến cố nguy hiểm
+    # 4. GỬI LỌC TELEGRAM CHỌN LỌC: Đính kèm lý do nguyên nhân cụ thể
     if TELE_TOKEN and TELE_CHAT_ID:
         if status_text != "🟩 Lý Tưởng" or is_near_danger:
             unique_days = sorted(list(set([r["Ngày"] for r in st.session_state.history])), reverse=True)
             h_latest = [r for r in st.session_state.history if r["Ngày"] == (unique_days[0] if unique_days else current_date_str)]
             trend, trend_type = predict_vpd_trend_v3(h_latest, current_sim_datetime.hour, plant_matrix)
             
+            # Chuẩn bị chuỗi tin nhắn Telegram có chèn nguyên nhân
             msg = (f"{warning_prefix}"
                    f"🌿 *VPD SMART ALARM (PHÁT HIỆN BẤT THƯỜNG)*\n⏰ {current_date_str} - {current_sim_datetime.strftime('%H:%M')} ({buoi_hien_tai})\n"
                    f"📊 Môi trường: {st.session_state.temp}°C | {st.session_state.rh}%\n"
-                   f"*VPD thực tế:* *{new_vpd:.2f} kPa* (Ngưỡng an toàn bạn đặt: {v_min}-{v_max} kPa)\n"
-                   f"📢 *Hiện trạng:* {status_text}\n🔮 *Dự báo:* _{trend}_")
+                   f"*VPD thực tế:* *{new_vpd:.2f} kPa* (Ngưỡng an toàn: {v_min}-{v_max} kPa)\n"
+                   f"📢 *Hiện trạng:* {status_text}\n"
+                   f"🔍 *Phân tích:* _{reason_text if reason_text else 'Môi trường lệch khỏi dải lý tưởng cài đặt.'}_\n"
+                   f"🔮 *Dự báo:* _{trend}_")
             send_telegram_message(TELE_TOKEN, TELE_CHAT_ID, msg)
     
     next_dt = current_sim_datetime + timedelta(minutes=10)
@@ -200,8 +222,7 @@ with tab_future:
                 col_m2.metric("💧 Độ ẩm khí", f"{st.session_state.rh}%")
                 
                 v_calc = calculate_vpd(st.session_state.temp, st.session_state.rh)
-                dp_calc = calculate_dew_point(st.session_state.temp, st.session_state.rh)
-                st.markdown(f"📊 **VPD Hiện tại:** ` {v_calc:.2f} kPa ` | 🥶 *Điểm đọng sương lá:* `{dp_calc} °C`")
+                st.markdown(f"📊 **VPD Hiện tại:** ` {v_calc:.2f} kPa `")
         live_monitor_panel()
 
         if st.session_state.history:
@@ -211,20 +232,26 @@ with tab_future:
             b_hien_tai = get_biological_block(sim_dt.hour)
             v_min, v_max = st.session_state.current_matrix[b_hien_tai]
             
+            # Khối hiển thị nguyên nhân trực tiếp trên giao diện Dashboard
             if cur_v >= v_max + 0.5:
-                st.markdown(f"<div class='danger-box-red'>🚨 QUÁ NÓNG (>={v_max+0.5} kPa): Bật phun sương hạt mịn full công suất + Xả toàn bộ rèm đỉnh tủ điện!</div>", unsafe_allow_html=True)
+                # Tìm nguyên nhân tương tự như phần gửi tin nhắn
+                sub_reason = "Do NHIỆT ĐỘ cao ngất" if st.session_state.temp > 28.0 else "Do ĐỘ ẨM tụt quá sâu"
+                st.markdown(f"<div class='danger-box-red'>🚨 QUÁ NÓNG ({sub_reason}): Bật phun sương hạt mịn full công suất + Mở rèm đỉnh đón gió giải nhiệt!</div>", unsafe_allow_html=True)
             elif cur_v > v_max:
+                sub_reason = "Do không khí hanh khô" if st.session_state.rh < 50.0 else "Do hấp nhiệt nhà kính"
                 if (v_max + 0.5) - cur_v <= 0.1:
-                    st.markdown(f"<div class='danger-box-red'>⚠️ SẮP QUÁ NÓNG (Cách ranh giới {((v_max+0.5)-cur_v):.2f} kPa): Kích hoạt khẩn cấp rèm chắn nắng!</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='danger-box-red'>⚠️ SẮP QUÁ NÓNG (Cách ranh giới biến cố {((v_max+0.5)-cur_v):.2f} kPa): Kích hoạt khẩn cấp rèm chắn nắng!</div>", unsafe_allow_html=True)
                 else:
-                    st.markdown(f"<div class='danger-box-yellow'>💛 NÓNG ({v_max} - {v_max+0.5} kPa): Kéo lưới cắt nắng, kích hoạt phun sương ngắt quãng làm mát.</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='danger-box-yellow'>💛 NÓNG ({sub_reason}): Kéo lưới cắt nắng, bật phun sương ngắt quãng giảm nhiệt.</div>", unsafe_allow_html=True)
             elif cur_v < v_min - 0.2:
-                st.markdown(f"<div class='danger-box-darkblue'>🔵 QUÁ ẨM (<{v_min-0.2} kPa): Bật toàn bộ quạt đối lưu, khép bớt hệ thống tưới gốc!</div>", unsafe_allow_html=True)
+                sub_reason = "Do ĐỘ ẨM tích tụ bão hòa" if st.session_state.rh > 85.0 else "Do TRỜI LẠNH SÂU"
+                st.markdown(f"<div class='danger-box-darkblue'>🔵 QUÁ ẨM ({sub_reason}): Bật quạt đối lưu tán cây, khép ngay hệ thống tưới nhỏ giọt!</div>", unsafe_allow_html=True)
             elif cur_v < v_min:
+                sub_reason = "Do đọng hơi nước" if st.session_state.rh > 80.0 else "Do nhiệt độ giảm"
                 if cur_v - (v_min - 0.2) <= 0.1:
-                    st.markdown(f"<div class='danger-box-darkblue'>⚠️ SẮP QUÁ ẨM (Cách ranh giới {(cur_v-(v_min-0.2)):.2f} kPa): Bật toàn bộ quạt hút gió cưỡng bức!</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='danger-box-darkblue'>⚠️ SẮP QUÁ ẨM (Cách ranh giới đọng sương {(cur_v-(v_min-0.2)):.2f} kPa): Bật toàn bộ quạt hút cưỡng bức xả ẩm!</div>", unsafe_allow_html=True)
                 else:
-                    st.markdown(f"<div class='danger-box-lightblue'>🌐 ẨM ({v_min-0.2} - {v_min} kPa): Hé rèm hông tăng cường lưu thông gió tự nhiên.</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='danger-box-lightblue'>🌐 ẨM ({sub_reason}): Hé bớt rèm hông tăng lưu thông không khí tự nhiên tự hủy ẩm.</div>", unsafe_allow_html=True)
             else:
                 st.success("🟩 LÝ TƯỞNG: Môi trường hoàn hảo cho cây quang hợp. Duy trì trạng thái ổn định.")
 
