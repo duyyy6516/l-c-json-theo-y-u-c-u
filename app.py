@@ -134,8 +134,7 @@ with tab1:
                     "Nhiệt độ (°C)": t_l,
                     "Độ ẩm (%)": r_l,
                     "VPD (kPa)": calculate_vpd(t_l, r_l),
-                    "Giờ": h,
-                    "Buổi": get_biological_block(h)  # ĐÃ THÊM DÒNG NÀY ĐỂ FIX TRIỆT ĐỂ LỖI TYPEERROR
+                    "Giờ": h
                 })
         df_sim_24h = pd.DataFrame(records_24h)
         
@@ -143,8 +142,14 @@ with tab1:
         st.altair_chart(draw_combined_temp_humidity_chart(df_sim_24h), use_container_width=True)
         
         st.subheader("📋 Phân Tích Khối Chu Kỳ & Đề Xuất Thiết Bị")
-        df_report_rt = analyze_day_by_blocks_rt(df_sim_24h, current_matrix)
-        st.dataframe(df_report_rt, use_container_width=True, hide_index=True)
+        # ĐÃ SỬA: Thay đổi hàm analyze_day_by_blocks_rt thành hàm bọc try-except hoặc chuẩn hóa thích hợp
+        try:
+            if "Buổi" not in df_sim_24h.columns:
+                df_sim_24h["Buổi"] = df_sim_24h["Giờ"].apply(get_biological_block)
+            df_report_rt = analyze_day_by_blocks_rt(df_sim_24h, current_matrix)
+            st.dataframe(df_report_rt, use_container_width=True, hide_index=True)
+        except Exception as report_err:
+            st.error(f"⚠️ Lỗi phân tích ma trận: {str(report_err)}")
         
         if st.button("📤 Phát Lệnh Cảnh Báo Khẩn Cấp Lên Telegram", type="primary"):
             if TELE_TOKEN and TELE_CHAT_ID:
@@ -185,9 +190,6 @@ with tab2:
                 if "Giờ" not in df_file.columns:
                     df_file["Giờ"] = pd.to_datetime(df_file["Hiển thị Giờ"], format="%H:%M", errors='coerce').dt.hour
                     df_file["Giờ"] = df_file["Giờ"].fillna(12).astype(int)
-                
-                if "Buổi" not in df_file.columns:
-                    df_file["Buổi"] = df_file["Giờ"].apply(get_biological_block)
                 
                 st.success(f"📥 Đọc file thành công! Tìm thấy `{len(df_file)}` mốc thời gian ghi nhận cảm biến.")
                 
