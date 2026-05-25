@@ -1,11 +1,10 @@
 import streamlit as st
 import pandas as pd
 import json
-import requests
 from datetime import datetime, timedelta
 
 from calculations import calculate_vpd, get_weather_by_time
-from services import send_telegram_message, get_quick_solution
+from services import send_telegram_message
 from analytics import (
     analyze_day_by_blocks_rt, 
     predict_vpd_trend_v3, 
@@ -24,16 +23,15 @@ st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"] { overflow-y: auto !important; scroll-behavior: smooth; }
     .block-container { padding-top: 1rem; padding-bottom: 2rem; padding-left: 1.5rem; padding-right: 1.5rem; }
-    .danger-box-red { padding: 12px; background-color: #FFEBEE; border-left: 6px solid #FF1744; color: #B71C1C; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
-    .danger-box-orange { padding: 12px; background-color: #FFF3E0; border-left: 6px solid #FF9800; color: #E65100; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
-    .danger-box-blue { padding: 12px; background-color: #E3F2FD; border-left: 6px solid #2979FF; color: #0D47A1; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
-    .danger-box-lightblue { padding: 12px; background-color: #F0F4C3; border-left: 6px solid #CDDC39; color: #827717; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
+    .danger-box-red { padding: 12px; background-color: #FFCDD2; border-left: 6px solid #E53935; color: #B71C1C; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
+    .danger-box-yellow { padding: 12px; background-color: #FFF9C4; border-left: 6px solid #FBC02D; color: #F57F17; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
+    .danger-box-darkblue { padding: 12px; background-color: #B3E5FC; border-left: 6px solid #0288D1; color: #01579B; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
+    .danger-box-lightblue { padding: 12px; background-color: #E1F5FE; border-left: 6px solid #29B6F6; color: #0277BD; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
     .upload-header { font-size: 15px; font-weight: bold; color: #1A5276; border-bottom: 2px solid #D4E6F1; padding-bottom: 4px; margin-bottom: 10px; }
     .metric-card-upload { background-color: #F4F6F7; border: 1px solid #E5E7E9; padding: 10px; border-radius: 6px; text-align: center; }
     </style>
     """, unsafe_allow_html=True)
 
-# Khởi tạo Session State
 if 'temp' not in st.session_state: st.session_state.temp = 0.0
 if 'rh' not in st.session_state: st.session_state.rh = 0.0
 if 'countdown' not in st.session_state: st.session_state.countdown = 15 
@@ -65,11 +63,11 @@ def style_status_rows(row):
     styles = [''] * len(row)
     status = str(row['Trạng thái'])
     loc = row.index.get_loc('Trạng thái')
-    if "Lý Tưởng" in status: styles[loc] = 'background-color: #E8F5E9; color: #1B5E20; font-weight: bold;'
-    elif "Quá Nóng" in status: styles[loc] = 'background-color: #FFEBEE; color: #B71C1C; font-weight: bold;'
-    elif "Nóng" in status: styles[loc] = 'background-color: #FFF3E0; color: #E65100; font-weight: bold;'
-    elif "Quá Ẩm" in status: styles[loc] = 'background-color: #E3F2FD; color: #0D47A1; font-weight: bold;'
-    elif "Ẩm" in status: styles[loc] = 'background-color: #F0F4C3; color: #827717; font-weight: bold;'
+    if "Lý Tưởng" in status: styles[loc] = 'background-color: #C8E6C9; color: #1B5E20; font-weight: bold;'
+    elif "Quá Nóng" in status: styles[loc] = 'background-color: #FFCDD2; color: #B71C1C; font-weight: bold;'
+    elif "Nóng" in status: styles[loc] = 'background-color: #FFF9C4; color: #F57F17; font-weight: bold;'
+    elif "Quá Ẩm" in status: styles[loc] = 'background-color: #B3E5FC; color: #01579B; font-weight: bold;'
+    elif "Ẩm" in status: styles[loc] = 'background-color: #E1F5FE; color: #0277BD; font-weight: bold;'
     return styles
 
 def trigger_new_data(plant_matrix):
@@ -84,9 +82,9 @@ def trigger_new_data(plant_matrix):
     v_min, v_max = plant_matrix[buoi_hien_tai]
     
     if new_vpd >= v_max + 0.5: status_text = "🔴 Quá Nóng"
-    elif new_vpd > v_max: status_text = "🟠 Nóng"
-    elif new_vpd < v_min - 0.2: status_text = "💙 Quá Ẩm"
-    elif new_vpd < v_min: status_text = "🔵 Ẩm"
+    elif new_vpd > v_max: status_text = "💛 Nóng"
+    elif new_vpd < v_min - 0.2: status_text = "🔵 Quá Ẩm"
+    elif new_vpd < v_min: status_text = "🌐 Ẩm"
     else: status_text = "🟩 Lý Tưởng"
     
     st.session_state.history.insert(0, {
@@ -186,11 +184,11 @@ with tab_future:
             if cur_v >= v_max + 0.5:
                 st.markdown(f"<div class='danger-box-red'>🚨 QUÁ NÓNG (>={v_max+0.5} kPa): Bật phun sương hạt mịn full công suất + Xả toàn bộ rèm đỉnh tủ điện!</div>", unsafe_allow_html=True)
             elif cur_v > v_max:
-                st.markdown(f"<div class='danger-box-orange'>🟠 NÓNG ({v_max} - {v_max+0.5} kPa): Kéo lưới cắt nắng, kích hoạt phun sương ngắt quãng làm mát.</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='danger-box-yellow'>💛 NÓNG ({v_max} - {v_max+0.5} kPa): Kéo lưới cắt nắng, kích hoạt phun sương ngắt quãng làm mát.</div>", unsafe_allow_html=True)
             elif cur_v < v_min - 0.2:
-                st.markdown(f"<div class='danger-box-blue'>💙 QUÁ ẨM (<{v_min-0.2} kPa): Bật toàn bộ quạt đối lưu, khép bớt hệ thống tưới gốc!</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='danger-box-darkblue'>🔵 QUÁ ẨM (<{v_min-0.2} kPa): Bật toàn bộ quạt đối lưu, khép bớt hệ thống tưới gốc!</div>", unsafe_allow_html=True)
             elif cur_v < v_min:
-                st.markdown(f"<div class='danger-box-lightblue'>🔵 ẨM ({v_min-0.2} - {v_min} kPa): Hé rèm hông tăng cường lưu thông gió tự nhiên.</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='danger-box-lightblue'>🌐 ẨM ({v_min-0.2} - {v_min} kPa): Hé rèm hông tăng cường lưu thông gió tự nhiên.</div>", unsafe_allow_html=True)
             else:
                 st.success("🟩 LÝ TƯỞNG: Môi trường hoàn hảo cho cây quang hợp. Duy trì trạng thái ổn định.")
 
@@ -348,9 +346,9 @@ with tab_past:
                 b_name = get_biological_block(r["datetime_internal"].hour)
                 f_min, f_max = file_matrix[b_name]
                 if r["VPD (kPa)"] >= f_max + 0.5: file_status_list.append("🔴 Quá Nóng")
-                elif r["VPD (kPa)"] > f_max: file_status_list.append("🟠 Nóng")
-                elif r["VPD (kPa)"] < f_min - 0.2: file_status_list.append("💙 Quá Ẩm")
-                elif r["VPD (kPa)"] < f_min: file_status_list.append("🔵 Ẩm")
+                elif r["VPD (kPa)"] > f_max: file_status_list.append("💛 Nóng")
+                elif r["VPD (kPa)"] < f_min - 0.2: file_status_list.append("🔵 Quá Ẩm")
+                elif r["VPD (kPa)"] < f_min: file_status_list.append("🌐 Ẩm")
                 else: file_status_list.append("🟩 Lý Tưởng")
             df_processed["Trạng thái"] = file_status_list
 
@@ -366,18 +364,18 @@ with tab_past:
             s_col1, s_col2 = st.columns(2)
             with s_col1:
                 d_hrs = adv_res["dry_hours"]
-                if d_hrs > 2.0: st.error(f"🚨 **Stress Khô Nóng:** Khí khổng bị ép khép chặt suốt **{d_hrs} giờ**. Cây ngừng quang hợp, có nguy cơ cháy lá hoa!")
+                if d_hrs > 2.0: st.error(f"🚨 **Stress Khô Nóng:** Khí khổng bị ép khép chặt suốt **{d_hrs} giờ**. Cây ngừng quang hợp!")
                 else: st.success(f"✅ **Áp lực khô:** An toàn (Chỉ có {d_hrs} giờ bị vượt ngưỡng khô gắt).")
             with s_col2:
                 w_hrs = adv_res["wet_hours"]
-                if w_hrs > 4.0: st.warning(f"🟦 **Stress Ẩm Ướt:** Môi trường tích tụ đọng ẩm liên tục **{w_hrs} giờ**. Nguy cơ bùng dịch nấm phấn trắng!")
+                if w_hrs > 4.0: st.warning(f"🟦 **Stress Ẩm Ướt:** Môi trường đọng ẩm liên tục **{w_hrs} giờ**. Nguy cơ bùng dịch nấm phấn trắng!")
                 else: st.success(f"✅ **Áp lực ẩm:** An toàn (Chỉ có {w_hrs} giờ đọng ẩm nằm ngoài dải).")
 
             st.markdown("#### 🍄 DỰ BÁO PHẦN TRĂM NGUY CƠ DỊCH NẤM ĐÀ LẠT")
             risk_val = adv_res['fungus_risk']
             if risk_val < 30: st.success(f"🟢 Mức độ rủi ro dịch bệnh THẤP ({risk_val}%). Thích hợp bón lá dinh dưỡng.")
-            elif risk_val < 70: st.warning(f"🟡 Mức độ rủi ro TRUNG BÌNH ({risk_val}%). Bào tử nấm bắt đầu mọc mầm, bật quạt thông gió ngay!")
-            else: st.error(f"🔴 CẢNH BÁO NGUY HIỂM CAO ({risk_val}%). Điều kiện lý tưởng bùng phát dịch nấm phấn trắng diện rộng!")
+            elif risk_val < 70: st.warning(f"🟡 Mức độ rủi ro TRUNG BÌNH ({risk_val}%). Bật quạt thông gió ngay!")
+            else: st.error(f"🔴 CẢNH BÁO NGUY HIỂM CAO ({risk_val}%). Điều kiện lý tưởng bùng phát dịch nấm diện rộng!")
             st.progress(risk_val / 100.0)
 
             res_left, res_right = st.columns([6.2, 3.8])
