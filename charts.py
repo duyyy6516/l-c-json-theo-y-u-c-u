@@ -4,7 +4,7 @@ import pandas as pd
 def draw_vpd_chart(df, v_min, v_max):
     """
     Vẽ biểu đồ diễn biến chỉ số VPD theo thời gian trong ngày.
-    Đã được chuẩn hóa cú pháp alt.Y(datum=...) để sửa lỗi crash trên Python 3.14 / Altair mới.
+    Đã được chuẩn hóa cú pháp padding (truyền số trực tiếp) để sửa lỗi SchemaValidationError trên Altair v6.
     """
     if df.empty:
         return alt.Chart(pd.DataFrame()).mark_blank()
@@ -12,7 +12,7 @@ def draw_vpd_chart(df, v_min, v_max):
     # 1. Định nghĩa các vùng màu nền đại diện cho các trạng thái của môi trường (Solid background)
     # Vùng Quá Ẩm (0.0 -> v_min - 0.2)
     zone_too_wet = alt.Chart(df).mark_rect(opacity=0.9, color='#0B5345').encode(
-        y=alt.value(350),
+        y=alt.Y(datum=0.0),
         y2=alt.Y(datum=0.0)
     )
 
@@ -89,13 +89,15 @@ def draw_vpd_chart(df, v_min, v_max):
             fontSize=13,
             fontWeight='bold',
             color='#5D6D7E',
-            offset=22,         # Tạo khoảng trống thông thoáng 22px giữa chữ tiêu đề và đỉnh đồ thị màu
+            offset=30,         # Tăng offset lên 30px để kéo chữ lên cao hẳn so với đồ thị
             orient='top',
             anchor='start'     # Căn lề trái thẳng hàng với trục Y
         )
     ).configure_view(
-        # Hạ thấp toàn bộ vùng đồ thị màu dịch xuống dưới một khoảng padding là 45px để tránh mất chữ.
-        padding={'top': 45, 'bottom': 10, 'left': 15, 'right': 15}
+        # SỬA LỖI TẬN GỐC TẠI ĐÂY:
+        # Thay vì truyền dict vào tham số padding, ta truyền thẳng một giá trị số thực (float/int).
+        # Altair v6/Vegalite chấp nhận số thực làm khoảng đệm an toàn xung quanh đồ thị.
+        padding=25.0
     ).configure_axis(
         domain=False
     )
@@ -170,7 +172,7 @@ def draw_combined_temp_humidity_chart(df):
             offset=10
         )
     ).configure_view(
-        padding={'top': 15, 'bottom': 10, 'left': 15, 'right': 15}
+        padding=15.0  # Chuẩn hóa padding dạng số thực cho Altair v6
     )
 
     return dual_axis_chart
