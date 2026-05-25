@@ -70,7 +70,7 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
         text='Nhãn:N'
     )
 
-    # 3. ĐƯỜNG TUYẾN TÍNH LIỀN MẠCH
+    # 3. ĐƯỜNG TUYẾN TÍNH LIỀN MẠCH VPD
     line = alt.Chart(df_chart).mark_line(
         point=alt.OverlayMarkDef(color="#FFFFFF", size=65, filled=True, stroke="#17202A", strokeWidth=1.5), 
         color="#FFFFFF", 
@@ -105,16 +105,60 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
 
     return final_chart
 
-def draw_temperature_chart(df):
-    return alt.Chart(df).mark_line(point=True, color="#E74C3C", strokeWidth=3).encode(
-        x=alt.X('Hiển thị Giờ:N', sort=None, title="Thời gian"),
-        y=alt.Y('Nhiệt độ (°C):Q', title="Nhiệt độ (°C)"),
-        tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)']
-    ).properties(height=240).configure_view(strokeWidth=0)
+def draw_combined_temp_humidity_chart(df):
+    """
+    Biểu đồ lồng nhau (Dual Axes): 
+    - Trục Y bên trái: Nhiệt độ (°C) - Màu đỏ thẫm rực rỡ
+    - Trục Y bên phải: Độ ẩm (%) - Màu xanh dương dịu mát
+    """
+    if df.empty:
+        return alt.Chart(pd.DataFrame()).mark_text().properties(title="Chưa có dữ liệu")
 
-def draw_humidity_chart(df):
-    return alt.Chart(df).mark_line(point=True, color="#3498DB", strokeWidth=3).encode(
-        x=alt.X('Hiển thị Giờ:N', sort=None, title="Thời gian"),
-        y=alt.Y('Độ ẩm (%):Q', title="Độ ẩm (%)"),
+    base = alt.Chart(df).encode(
+        x=alt.X('Hiển thị Giờ:N', sort=None, title="Thời gian")
+    )
+
+    # Lớp 1: Đường Nhiệt độ (Trục Y bên trái)
+    temp_line = base.mark_line(
+        point=alt.OverlayMarkDef(color="#E74C3C", size=40, filled=True),
+        color="#E74C3C", 
+        strokeWidth=3
+    ).encode(
+        y=alt.Y('Nhiệt độ (°C):Q', 
+                title='🌡️ Nhiệt độ khí (°C)',
+                axis=alt.Axis(titleColor='#E74C3C', labelColor='#E74C3C')),
+        tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)']
+    )
+
+    # Lớp 2: Đường Độ ẩm (Trục Y bên phải độc lập)
+    humidity_line = base.mark_line(
+        point=alt.OverlayMarkDef(color="#3498DB", size=40, filled=True),
+        color="#3498DB", 
+        strokeWidth=3
+    ).encode(
+        y=alt.Y('Độ ẩm (%):Q', 
+                title='💧 Độ ẩm khí (%)',
+                axis=alt.Axis(titleColor='#3498DB', labelColor='#3498DB'),
+                scale=alt.Scale(domain=[0, 100])),
         tooltip=['Hiển thị Giờ', 'Độ ẩm (%)']
-    ).properties(height=240).configure_view(strokeWidth=0)
+    )
+
+    # Gộp 2 trục Y nằm lồng nhau trên cùng 1 biểu đồ trục X
+    combined = alt.layer(temp_line, humidity_line).resolve_scale(
+        y='independent'
+    ).properties(
+        width=850,
+        height=260,
+        title=alt.TitleParams(
+            text="BIỂU ĐỒ ĐỐI CHIẾU SONG SONG GIỮA NHIỆT ĐỘ & ĐỘ ẨM KHÔNG KHÍ",
+            anchor="start",
+            fontSize=13,
+            fontWeight='bold',
+            color='#2C3E50'
+        )
+    ).configure_view(
+        strokeWidth=1,
+        stroke="#BDC3C7"
+    )
+
+    return combined
