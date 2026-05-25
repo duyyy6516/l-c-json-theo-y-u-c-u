@@ -19,16 +19,17 @@ TELE_CHAT_ID = "7290661009"
 
 st.set_page_config(page_title="VPD Smart Farm Monitor Pro", page_icon="🌿", layout="wide")
 
+# Thiết lập mã màu CSS dạng Solid Đậm, chữ màu trắng hoặc màu tương tương phản siêu mạnh để dễ đọc
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"] { overflow-y: auto !important; scroll-behavior: smooth; }
     .block-container { padding-top: 1rem; padding-bottom: 2rem; padding-left: 1.5rem; padding-right: 1.5rem; }
-    .danger-box-red { padding: 12px; background-color: #FFCDD2; border-left: 6px solid #E53935; color: #B71C1C; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
-    .danger-box-yellow { padding: 12px; background-color: #FFF9C4; border-left: 6px solid #FBC02D; color: #F57F17; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
-    .danger-box-darkblue { padding: 12px; background-color: #B3E5FC; border-left: 6px solid #0288D1; color: #01579B; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
-    .danger-box-lightblue { padding: 12px; background-color: #E1F5FE; border-left: 6px solid #29B6F6; color: #0277BD; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
-    .upload-header { font-size: 15px; font-weight: bold; color: #1A5276; border-bottom: 2px solid #D4E6F1; padding-bottom: 4px; margin-bottom: 10px; }
-    .metric-card-upload { background-color: #F4F6F7; border: 1px solid #E5E7E9; padding: 10px; border-radius: 6px; text-align: center; }
+    .danger-box-red { padding: 12px; background-color: #C0392B; border-left: 6px solid #17202A; color: #FFFFFF; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
+    .danger-box-yellow { padding: 12px; background-color: #F39C12; border-left: 6px solid #17202A; color: #FFFFFF; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
+    .danger-box-darkblue { padding: 12px; background-color: #0B5345; border-left: 6px solid #17202A; color: #FFFFFF; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
+    .danger-box-lightblue { padding: 12px; background-color: #2980B9; border-left: 6px solid #17202A; color: #FFFFFF; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
+    .upload-header { font-size: 15px; font-weight: bold; color: #114B72; border-bottom: 2px solid #114B72; padding-bottom: 4px; margin-bottom: 10px; }
+    .metric-card-upload { background-color: #EAEDED; border: 2px solid #BDC3C7; padding: 10px; border-radius: 6px; text-align: center; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -63,11 +64,12 @@ def style_status_rows(row):
     styles = [''] * len(row)
     status = str(row['Trạng thái'])
     loc = row.index.get_loc('Trạng thái')
-    if "Lý Tưởng" in status: styles[loc] = 'background-color: #C8E6C9; color: #1B5E20; font-weight: bold;'
-    elif "Quá Nóng" in status: styles[loc] = 'background-color: #FFCDD2; color: #B71C1C; font-weight: bold;'
-    elif "Nóng" in status: styles[loc] = 'background-color: #FFF9C4; color: #F57F17; font-weight: bold;'
-    elif "Quá Ẩm" in status: styles[loc] = 'background-color: #B3E5FC; color: #01579B; font-weight: bold;'
-    elif "Ẩm" in status: styles[loc] = 'background-color: #E1F5FE; color: #0277BD; font-weight: bold;'
+    # Style tô màu khối đặc cho từng dòng bảng dữ liệu lịch sử
+    if "Lý Tưởng" in status: styles[loc] = 'background-color: #27AE60; color: #FFFFFF; font-weight: bold;'
+    elif "Quá Nóng" in status: styles[loc] = 'background-color: #C0392B; color: #FFFFFF; font-weight: bold;'
+    elif "Nóng" in status: styles[loc] = 'background-color: #F39C12; color: #FFFFFF; font-weight: bold;'
+    elif "Quá Ẩm" in status: styles[loc] = 'background-color: #0B5345; color: #FFFFFF; font-weight: bold;'
+    elif "Ẩm" in status: styles[loc] = 'background-color: #2980B9; color: #FFFFFF; font-weight: bold;'
     return styles
 
 def trigger_new_data(plant_matrix):
@@ -99,7 +101,7 @@ def trigger_new_data(plant_matrix):
         h_latest = [r for r in st.session_state.history if r["Ngày"] == (unique_days[0] if unique_days else current_date_str)]
         trend, trend_type = predict_vpd_trend_v3(h_latest, current_sim_datetime.hour, plant_matrix)
         
-        msg = (f"🌿 *VPD MONITOR 5 PHÂN VÙNG*\n⏰ {current_date_str} - {current_sim_datetime.strftime('%H:%M')} ({buoi_hien_tai})\n"
+        msg = (f"🌿 *VPD MONITOR 5 PHÂN VÙNG ĐẬM*\n⏰ {current_date_str} - {current_sim_datetime.strftime('%H:%M')} ({buoi_hien_tai})\n"
                f"📊 Môi trường: {st.session_state.temp}°C | {st.session_state.rh}%\n"
                f"*VPD thực tế:* *{new_vpd:.2f} kPa* (Ngưỡng lý tưởng buổi: {v_min}-{v_max} kPa)\n"
                f"📢 *Hiện trạng:* {status_text}\n🔮 *Dự báo:* _{trend}_")
@@ -118,7 +120,7 @@ tab_future, tab_past = st.tabs(["🔮 MÔ PHỎNG & XEM REALTIME", "📁 QUÉT F
 with tab_future:
     left_col, right_col = st.columns([4, 6])
     with left_col:
-        st.markdown("<h3 style='color: #2E7D32; font-size: 17px;'>📋 CẤU HÌNH MA TRẬN VPD THEO BUỔI</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #1E8449; font-size: 17px;'>📋 CẤU HÌNH MA TRẬN VPD THEO BUỔI</h3>", unsafe_allow_html=True)
         preset_choice = st.selectbox("Chọn giống cây áp ma trận mẫu:", list(PLANT_PRESETS.keys()) + ["🛠️ Tùy chỉnh thủ công từng buổi"])
         
         if preset_choice != "🛠️ Tùy chỉnh thủ công từng buổi":
@@ -193,7 +195,7 @@ with tab_future:
                 st.success("🟩 LÝ TƯỞNG: Môi trường hoàn hảo cho cây quang hợp. Duy trì trạng thái ổn định.")
 
     with right_col:
-        st.markdown("<h3 style='color: #2E7D32; font-size: 17px;'>📊 PHÂN TÍCH DIỄN BIẾN CHU KỲ PHÒNG DỊCH</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #1E8449; font-size: 17px;'>📊 PHÂN TÍCH DIỄN BIẾN CHU KỲ PHÒNG DỊCH</h3>", unsafe_allow_html=True)
         if not st.session_state.history:
             st.info("Hệ thống đang tích lũy dữ liệu chu kỳ trạm.")
         else:
@@ -213,7 +215,7 @@ with tab_future:
                 st.dataframe(df_f[["STT", "Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]].style.apply(style_status_rows, axis=1), use_container_width=True, hide_index=True)
 
 with tab_past:
-    st.markdown("<h3 style='color: #1A5276; font-size: 18px;'>📁 TẢI FILE NHẬT KÝ IOT TRẠM CẢM BIẾN</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #114B72; font-size: 18px;'>📁 TẢI FILE NHẬT KÝ IOT TRẠM CẢM BIẾN</h3>", unsafe_allow_html=True)
     f_left, f_right = st.columns([4, 6])
     
     with f_left:
@@ -352,12 +354,12 @@ with tab_past:
                 else: file_status_list.append("🟩 Lý Tưởng")
             df_processed["Trạng thái"] = file_status_list
 
-            st.markdown("<div style='margin-top:12px; margin-bottom:5px; font-weight:bold; color:#1A5276;'>📊 TỔNG QUAN CHU KỲ SAU KHI GỘP SỐ LIỆU FILE</div>", unsafe_allow_html=True)
+            st.markdown("<div style='margin-top:12px; margin-bottom:5px; font-weight:bold; color:#114B72;'>📊 TỔNG QUAN CHU KỲ SAU KHI GỘP SỐ LIỆU FILE</div>", unsafe_allow_html=True)
             m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-            m_col1.markdown(f"<div class='metric-card-upload'><span style='font-size:12px;color:grey;'>📈 VPD TRUNG BÌNH</span><br><b style='font-size:18px;color:#2E7D32;'>{df_processed['VPD (kPa)'].mean():.2f} kPa</b></div>", unsafe_allow_html=True)
-            m_col2.markdown(f"<div class='metric-card-upload'><span style='font-size:12px;color:grey;'>🌡️ NHIỆT ĐỘ TRUNG BÌNH</span><br><b style='font-size:18px;color:#FF4B4B;'>{df_processed['Nhiệt độ (°C)'].mean():.1f} °C</b></div>", unsafe_allow_html=True)
-            m_col3.markdown(f"<div class='metric-card-upload'><span style='font-size:12px;color:grey;'>💧 ĐỘ ẨM TRUNG BÌNH</span><br><b style='font-size:18px;color:#0068C9;'>{df_processed['Độ ẩm (%)'].mean():.1f} %</b></div>", unsafe_allow_html=True)
-            m_col4.markdown(f"<div class='metric-card-upload'><span style='font-size:12px;color:grey;'>📋 SỐ ĐIỂM BIỂU ĐỒ</span><br><b style='font-size:18px;color:#5D6D7E;'>{len(df_processed)} điểm</b></div>", unsafe_allow_html=True)
+            m_col1.markdown(f"<div class='metric-card-upload'><span style='font-size:12px;color:grey;'>📈 VPD TRUNG BÌNH</span><br><b style='font-size:18px;color:#1E8449;'>{df_processed['VPD (kPa)'].mean():.2f} kPa</b></div>", unsafe_allow_html=True)
+            m_col2.markdown(f"<div class='metric-card-upload'><span style='font-size:12px;color:grey;'>🌡️ NHIỆT ĐỘ TRUNG BÌNH</span><br><b style='font-size:18px;color:#C0392B;'>{df_processed['Nhiệt độ (°C)'].mean():.1f} °C</b></div>", unsafe_allow_html=True)
+            m_col3.markdown(f"<div class='metric-card-upload'><span style='font-size:12px;color:grey;'>💧 ĐỘ ẨM TRUNG BÌNH</span><br><b style='font-size:18px;color:#2980B9;'>{df_processed['Độ ẩm (%)'].mean():.1f} %</b></div>", unsafe_allow_html=True)
+            m_col4.markdown(f"<div class='metric-card-upload'><span style='font-size:12px;color:grey;'>📋 SỐ ĐIỂM BIỂU ĐỒ</span><br><b style='font-size:18px;color:#2C3E50;'>{len(df_processed)} điểm</b></div>", unsafe_allow_html=True)
 
             adv_res = calculate_plant_stress_hours(df_processed, file_matrix, time_filter_option)
             st.markdown("<div style='margin-top:15px; font-weight:bold; color:#B71C1C;'>⚠️ ĐÁNH GIÁ CHUYÊN SÂU: ÁP LỰC STRESS KHÍ KHỔNG CỦA CÂY TRỒNG</div>", unsafe_allow_html=True)
@@ -380,7 +382,7 @@ with tab_past:
 
             res_left, res_right = st.columns([6.2, 3.8])
             with res_left:
-                st.markdown("<div style='font-weight:bold; color:#1A5276; margin-bottom:5px;'>📈 CÁC BIỂU ĐỒ ĐỐI CHIẾU TRỰC QUAN</div>", unsafe_allow_html=True)
+                st.markdown("<div style='font-weight:bold; color:#114B72; margin-bottom:5px;'>📈 CÁC BIỂU ĐỒ ĐỐI CHIẾU TRỰC QUAN</div>", unsafe_allow_html=True)
                 f_tab1, f_tab2, f_tab3 = st.tabs(["🎯 Chỉ số VPD", "🌡️ Nhiệt độ khí", "💧 Độ ẩm khí"])
                 
                 f_min_sample, f_max_sample = file_matrix["🌅 Sáng (05h - 10h)"]
@@ -388,7 +390,7 @@ with tab_past:
                 with f_tab2: st.altair_chart(draw_temperature_chart(df_processed), use_container_width=True)
                 with f_tab3: st.altair_chart(draw_humidity_chart(df_processed), use_container_width=True)
             with res_right:
-                st.markdown("<div style='font-weight:bold; color:#1A5276; margin-bottom:5px;'>📋 NHẬT KÝ ĐIỂM GỘP CHU KỲ CHUYÊN SÂU</div>", unsafe_allow_html=True)
+                st.markdown("<div style='font-weight:bold; color:#114B72; margin-bottom:5px;'>📋 NHẬT KÝ ĐIỂM GỘP CHU KỲ CHUYÊN SÂU</div>", unsafe_allow_html=True)
                 preview_cols = ["Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]
                 st.dataframe(df_processed[preview_cols].style.apply(style_status_rows, axis=1), use_container_width=True, hide_index=True, height=270)
 
@@ -400,7 +402,7 @@ with tab_past:
                 
                 if st.button("📤 Gửi báo cáo ma trận qua Telegram", type="primary", key="btn_send_file_tele"):
                     if TELE_TOKEN and TELE_CHAT_ID:
-                        file_tele_msg = f"📂 *BÁO CÁO CHU KỲ FILE - 5 PHÂN VÙNG*\n📦 File: `{uploaded_file.name}`\n🎯 Mô hình: *{f_preset_choice}*\n━━━━━━━━━━━━━━━━━━━━\n\n"
+                        file_tele_msg = f"📂 *BÁO CÁO CHU KỲ FILE - 5 PHÂN VÙNG ĐẬM*\n📦 File: `{uploaded_file.name}`\n🎯 Mô hình: *{f_preset_choice}*\n━━━━━━━━━━━━━━━━━━━━\n\n"
                         for _, r_data in df_block_report.iterrows():
                             file_tele_msg += f"Buổi *{r_data['Khoảng Buổi']}*\n▪️ Môi trường: {r_data['Nhiệt độ TB']} | {r_data['Độ ẩm TB']}\n▪️ VPD TB: *{r_data['VPD Trung Bình']}*\n▪️ Đánh giá: *{r_data['Đánh giá sinh học']}*\n▪️ Giải pháp: {r_data['Giải pháp kỹ thuật']}\n────────────────────\n"
                         file_tele_msg += f"\n📊 _Hệ thống tự động chấm điểm sinh học VPD Smart Farm_"
