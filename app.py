@@ -19,27 +19,25 @@ TELE_CHAT_ID = "7290661009"
 
 st.set_page_config(page_title="VPD Smart Farm Monitor Pro", page_icon="🌿", layout="wide")
 
-st.markdown("""
-    <style>
-    html, body, [data-testid="stAppViewContainer"] { overflow-y: auto !important; scroll-behavior: smooth; }
-    .block-container { padding-top: 1rem; padding-bottom: 2rem; padding-left: 1.5rem; padding-right: 1.5rem; }
-    .danger-box-red { padding: 12px; background-color: #C0392B; border-left: 6px solid #17202A; color: #FFFFFF; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
-    .danger-box-yellow { padding: 12px; background-color: #F39C12; border-left: 6px solid #17202A; color: #FFFFFF; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
-    .danger-box-darkblue { padding: 12px; background-color: #0B5345; border-left: 6px solid #17202A; color: #FFFFFF; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
-    .danger-box-lightblue { padding: 12px; background-color: #2980B9; border-left: 6px solid #17202A; color: #FFFFFF; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }
-    .upload-header { font-size: 15px; font-weight: bold; color: #114B72; border-bottom: 2px solid #114B72; padding-bottom: 4px; margin-bottom: 10px; }
-    .metric-card-upload { background-color: #EAEDED; border: 2px solid #BDC3C7; padding: 10px; border-radius: 6px; text-align: center; }
-    
-    /* Giao diện giám sát lớn - Ô gộp liền mạch */
-    .big-vpd-box { background-color: #F8F9F9; border: 2px solid #2ECC71; border-radius: 8px; padding: 18px; text-align: center; margin-bottom: 10px; }
-    .big-vpd-title { font-size: 14px; color: #7F8C8D; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
-    .big-vpd-value { font-size: 45px; color: #27AE60; font-weight: 900; line-height: 1.0; margin-top: 5px; margin-bottom: 5px; }
-    .big-env-value { font-size: 20px; color: #2C3E50; font-weight: bold; margin-bottom: 12px; }
-    
-    /* Khung phân tích thông tin gộp chung tích hợp hướng xử lý */
-    .analysis-merge-box { background-color: #EAECEE; color: #2C3E50; padding: 12px 15px; border-radius: 6px; font-size: 13.5px; font-weight: 500; text-align: left; border-left: 5px solid #27AE60; line-height: 1.6; }
-    </style>
-    """, unsafe_allow_html=True)
+# SỬA LỖI CHUỖI DÀI PYTHON 3.14+: Tách nhỏ CSS thành list để nối chuỗi an toàn
+css_styles = [
+    "<style>",
+    "html, body, [data-testid='stAppViewContainer'] { overflow-y: auto !important; scroll-behavior: smooth; }",
+    ".block-container { padding-top: 1rem; padding-bottom: 2rem; padding-left: 1.5rem; padding-right: 1.5rem; }",
+    ".danger-box-red { padding: 12px; background-color: #C0392B; border-left: 6px solid #17202A; color: #FFFFFF; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }",
+    ".danger-box-yellow { padding: 12px; background-color: #F39C12; border-left: 6px solid #17202A; color: #FFFFFF; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }",
+    ".danger-box-darkblue { padding: 12px; background-color: #0B5345; border-left: 6px solid #17202A; color: #FFFFFF; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }",
+    ".danger-box-lightblue { padding: 12px; background-color: #2980B9; border-left: 6px solid #17202A; color: #FFFFFF; font-weight: bold; border-radius: 4px; margin-bottom: 8px; }",
+    ".upload-header { font-size: 15px; font-weight: bold; color: #114B72; border-bottom: 2px solid #114B72; padding-bottom: 4px; margin-bottom: 10px; }",
+    ".metric-card-upload { background-color: #EAEDED; border: 2px solid #BDC3C7; padding: 10px; border-radius: 6px; text-align: center; }",
+    ".big-vpd-box { background-color: #F8F9F9; border: 2px solid #2ECC71; border-radius: 8px; padding: 18px; text-align: center; margin-bottom: 10px; }",
+    ".big-vpd-title { font-size: 14px; color: #7F8C8D; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }",
+    ".big-vpd-value { font-size: 45px; color: #27AE60; font-weight: 900; line-height: 1.0; margin-top: 5px; margin-bottom: 5px; }",
+    ".big-env-value { font-size: 20px; color: #2C3E50; font-weight: bold; margin-bottom: 12px; }",
+    ".analysis-merge-box { background-color: #EAECEE; color: #2C3E50; padding: 12px 15px; border-radius: 6px; font-size: 13.5px; font-weight: 500; text-align: left; border-left: 5px solid #27AE60; line-height: 1.6; }",
+    "</style>"
+]
+st.markdown("".join(css_styles), unsafe_allow_html=True)
 
 if 'temp' not in st.session_state: st.session_state.temp = 0.0
 if 'rh' not in st.session_state: st.session_state.rh = 0.0
@@ -124,11 +122,11 @@ def trigger_new_data(plant_matrix):
     
     if v_max < new_vpd < v_max + 0.5:
         if (v_max + 0.5) - new_vpd <= 0.1:
-            warning_prefix = f"⚠️ [CẢNH BÁO SỚM]: SẮP CHẠM NGƯỠNG BIẾN CỐ NGUY HIỂM!\n"
+            warning_prefix = "⚠️ [CẢNH BÁO SỚM]: SẮP CHẠM NGƯỠNG BIẾN CỐ NGUY HIỂM!\n"
             is_near_danger = True
     elif v_min - 0.2 < new_vpd < v_min:
         if new_vpd - (v_min - 0.2) <= 0.1:
-            warning_prefix = f"⚠️ [CẢNH BÁO SỚM]: SẮP CHẠM NGƯỠNG ĐỌNG SƯƠNG BÙNG NẤM!\n"
+            warning_prefix = "⚠️ [CẢNH BÁO SỚM]: SẮP CHẠM NGƯỠNG ĐỌNG SƯƠNG BÙNG NẤM!\n"
             is_near_danger = True
 
     st.session_state.history.insert(0, {
@@ -301,25 +299,21 @@ with tab_future:
             b_hien_tai = get_biological_block(sim_dt.hour)
             v_min, v_max = st.session_state.current_matrix[b_hien_tai]
             
-            # 1. BIỂU ĐỒ BIẾN ĐỘNG VPD (Ở TRÊN CÙNG)
-            # --- ĐOẠN UPDATE CHUẨN DÒNG 305 TRONG APP.PY ---
+            # ĐÃ ĐƯA ĐOẠN LỖI THỤT LỀ VÀO ĐÚNG KHỐI TRỰC THUỘC right_col
+            st.markdown(
+                f"""
+                <div style="background-color: #F8F9F9; padding: 10px 14px; border-left: 4px solid #27AE60; border-radius: 4px; margin-bottom: 12px; font-size: 13px; color: #2C3E50; font-weight: bold;">
+                    Cạn dưới: {v_min} kPa | Cạn trên: {v_max} kPa | Khoá dải màu Solid đậm | vạch dựng phân buổi
+                </div>
+                """, 
+                unsafe_allow_html=True
+            )
 
-# 1. Hiển thị dòng chú thích thông số dải màu bằng HTML/CSS (Đẹp, thông thoáng, không lo che khuất)
-st.markdown(
-    f"""
-    <div style="background-color: #F8F9F9; padding: 10px 14px; border-left: 4px solid #27AE60; border-radius: 4px; margin-bottom: 12px; font-size: 13px; color: #2C3E50; font-weight: bold;">
-        Cạn dưới: {v_min} kPa | Cạn trên: {v_max} kPa | Khoá dải màu Solid đậm | vạch dựng phân buổi
-    </div>
-    """, 
-    unsafe_allow_html=True
-)
+            st.markdown("**🎨 Thanh dải màu trạng thái:** 🟢 *Lý Tưởng (Trong dải nét đứt)* | 🔵 *Ẩm* | 🟡 *Nóng*")
 
-# 2. Render hệ thống màu cảnh báo bằng thanh khối màu trực quan Streamlit trước biểu đồ
-st.markdown("**🎨 Thanh dải màu trạng thái:** 🟢 *Lý Tưởng (Trong dải nét đứt)* | 🔵 *Ẩm* | 🟡 *Nóng*")
-
-# 3. Chạy biểu đồ VPD an toàn từ file charts.py
-st.altair_chart(draw_vpd_chart(df_f, v_min, v_max), use_container_width=True)
-            
+            # 1. Chạy biểu đồ VPD an toàn từ file charts.py
+            st.altair_chart(draw_vpd_chart(df_f, v_min, v_max), use_container_width=True)
+                        
             # 2. BIỂU ĐỒ NHIỆT ĐỘ ĐỘ ẨM LỒNG VÀO NHAU (Ở NGAY PHÍA DƯỚI)
             st.altair_chart(draw_combined_temp_humidity_chart(df_f), use_container_width=True)
                 
@@ -489,11 +483,11 @@ with tab_past:
             with s_col1:
                 d_hrs = adv_res["dry_hours"]
                 if d_hrs > 2.0: st.error(f"🚨 **Stress Khô Nóng:** Khí khổng bị ép khép chặt suốt **{d_hrs} giờ**. Cây ngừng quang hợp!")
-                else: st.success(f"✅ **Áp lực khô:** An toàn.")
+                else: st.success("✅ **Áp lực khô:** An toàn.")
             with s_col2:
                 w_hrs = adv_res["wet_hours"]
                 if w_hrs > 4.0: st.warning(f"🟦 **Stress Ẩm Ướt:** Môi trường đọng ẩm liên tục **{w_hrs} giờ**. Nguy cơ bùng dịch nấm phấn trắng!")
-                else: st.success(f"✅ **Áp lực ẩm:** An toàn.")
+                else: st.success("✅ **Áp lực ẩm:** An toàn.")
 
             st.markdown("#### 🍄 DỰ BÁO PHẦN TRĂM NGUY CƠ DỊCH NẤM ĐÀ LẠT")
             risk_val = adv_res['fungus_risk']
@@ -526,7 +520,7 @@ with tab_past:
                         file_tele_msg = f"📂 *BÁO CÁO CHU KỲ FILE*\n📦 File: `{uploaded_file.name}`\n🎯 Mô hình: *{f_preset_choice}*\n━━━━━━━━━━━━━━━━━━━━\n\n"
                         for _, r_data in df_block_report.iterrows():
                             file_tele_msg += f"Buổi *{r_data['Khoảng Buổi']}*\n▪️ Môi trường: {r_data['Nhiệt độ TB']} | {r_data['Độ ẩm TB']}\n▪️ VPD TB: *{r_data['VPD Trung Bình']}*\n▪️ Đánh giá: *{r_data['Đánh giá sinh học']}*\n▪️ Giải pháp: {r_data['Giải pháp kỹ thuật']}\n────────────────────\n"
-                        file_tele_msg += f"\n📊 _Hệ thống tự động chấm điểm sinh học VPD Smart Farm_"
+                        file_tele_msg += "\n📊 _Hệ thống tự động chấm điểm sinh học VPD Smart Farm_"
                         success = send_telegram_message(TELE_TOKEN, TELE_CHAT_ID, file_tele_msg)
                         if success: st.success("✅ Đã gửi toàn bộ dữ liệu báo cáo qua Telegram thành công!")
             else:
