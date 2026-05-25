@@ -4,15 +4,19 @@ import json
 from datetime import datetime, timedelta
 
 # Import các module nội bộ từ kho hệ thống
+# XÓA HOẶC SỬA ĐOẠN IMPORT CŨ NÀY (Khoảng dòng 7 - 12 trong app.py):
 from calculations import calculate_vpd, get_weather_by_time
 from services import send_telegram_message, get_quick_solution
-from analytics import analyze_day_by_blocks_rt, predict_vpd_trend_v3, calculate_plant_stress_hours
+
+# THAY BẰNG ĐOẠN IMPORT CHUẨN MA TRẬN BUỔI DƯỚI ĐÂY:
+from analytics import (
+    analyze_day_by_blocks_dynamic, 
+    predict_vpd_trend_dynamic, 
+    calculate_dynamic_plant_stress, 
+    calculate_dew_point, 
+    get_biological_block
+)
 from charts import draw_temperature_chart, draw_humidity_chart, draw_vpd_chart, draw_combined_chart
-
-TELE_TOKEN = "8917951413:AAE6LKUEfYEYiQrFWGoKsQn0tumZc_XbcHg"
-TELE_CHAT_ID = "7290661009"
-
-st.set_page_config(page_title="VPD Farm Analytics", page_icon="🌿", layout="wide")
 
 # CẤU HÌNH GIAO DIỆN CHUYÊN NGHIỆP CAO
 st.markdown("""
