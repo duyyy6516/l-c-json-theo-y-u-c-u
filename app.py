@@ -30,13 +30,14 @@ st.markdown("""
     .upload-header { font-size: 15px; font-weight: bold; color: #114B72; border-bottom: 2px solid #114B72; padding-bottom: 4px; margin-bottom: 10px; }
     .metric-card-upload { background-color: #EAEDED; border: 2px solid #BDC3C7; padding: 10px; border-radius: 6px; text-align: center; }
     
-    /* Style mới phóng to thông số chính */
-    .big-vpd-box { background-color: #F8F9F9; border: 2px solid #2ECC71; border-radius: 8px; padding: 15px; text-align: center; margin-bottom: 10px; }
-    .big-vpd-title { font-size: 14px; color: #7F8C8D; font-weight: bold; text-transform: uppercase; }
-    .big-vpd-value { font-size: 42px; color: #27AE60; font-weight: 900; line-height: 1.1; }
-    .big-env-value { font-size: 18px; color: #2C3E50; font-weight: bold; margin-top: 5px; }
-    .reason-badge { background-color: #EAECEE; color: #2C3E50; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; display: inline-block; margin-top: 8px; border-left: 4px solid #7F8C8D; }
-    .trend-badge { background-color: #E8F8F5; color: #117864; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: bold; display: inline-block; margin-top: 5px; border-left: 4px solid #1ABC9C; }
+    /* Giao diện giám sát lớn - Đã gộp tinh gọn */
+    .big-vpd-box { background-color: #F8F9F9; border: 2px solid #2ECC71; border-radius: 8px; padding: 18px; text-align: center; margin-bottom: 10px; }
+    .big-vpd-title { font-size: 14px; color: #7F8C8D; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
+    .big-vpd-value { font-size: 45px; color: #27AE60; font-weight: 900; line-height: 1.0; margin-top: 5px; margin-bottom: 5px; }
+    .big-env-value { font-size: 20px; color: #2C3E50; font-weight: bold; margin-bottom: 12px; }
+    
+    /* Khung phân tích thông tin gộp chung làm một dòng thống nhất */
+    .analysis-merge-box { background-color: #EAECEE; color: #2C3E50; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; font-weight: 500; text-align: left; border-left: 5px solid #27AE60; line-height: 1.5; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -82,7 +83,6 @@ def style_status_rows(row):
     return styles
 
 def get_env_reason(status, temp, rh):
-    """Hàm bổ trợ bóc tách nguyên nhân cốt lõi"""
     if "Nóng" in status:
         if temp > 28.0 and rh >= 50.0: return "🔥 Do Nhiệt độ bức xạ tăng cao"
         elif rh < 50.0 and temp <= 28.0: return "🌵 Do Độ ẩm không khí tụt sâu (Hanh khô)"
@@ -104,17 +104,13 @@ def trigger_new_data(plant_matrix):
     buoi_hien_tai = get_biological_block(current_sim_datetime.hour)
     v_min, v_max = plant_matrix[buoi_hien_tai]
     
-    # 1. Xác định trạng thái chính xác của VPD
     if new_vpd >= v_max + 0.5: status_text = "🔴 Quá Nóng"
     elif new_vpd > v_max: status_text = "💛 Nóng"
     elif new_vpd < v_min - 0.2: status_text = "🔵 Quá Ẩm"
     elif new_vpd < v_min: status_text = "🌐 Ẩm"
     else: status_text = "🟩 Lý Tưởng"
     
-    # 2. Phân tích nguyên nhân luôn lúc sinh dữ liệu
     reason_text = get_env_reason(status_text, st.session_state.temp, st.session_state.rh)
-            
-    # 3. Quét điều kiện cảnh báo sớm (Cách ranh giới nguy hiểm 0.1 kPa)
     warning_prefix = ""
     is_near_danger = False
     
@@ -127,7 +123,6 @@ def trigger_new_data(plant_matrix):
             warning_prefix = f"⚠️ [CẢNH BÁO SỚM]: Môi trường tích tụ nước, SẮP CHẠM NGƯỠNG QUÁ ẨM ĐỌNG SƯƠNG!\n💡 {reason_text}\n"
             is_near_danger = True
 
-    # Lưu lịch sử hiển thị giao diện Web
     st.session_state.history.insert(0, {
         "STT": st.session_state.stt_counter, "Ngày": current_date_str,
         "Thời gian mô phỏng": current_sim_datetime, "Hiển thị Giờ": current_sim_datetime.strftime("%H:%M"),
@@ -135,12 +130,14 @@ def trigger_new_data(plant_matrix):
         "VPD (kPa)": round(new_vpd, 2), "Trạng thái": status_text
     })
 
-    # 4. GỬI LỌC TELEGRAM CHỌN LỌC
     if TELE_TOKEN and TELE_CHAT_ID:
         if status_text != "🟩 Lý Tưởng" or is_near_danger:
             unique_days = sorted(list(set([r["Ngày"] for r in st.session_state.history])), reverse=True)
             h_latest = [r for r in st.session_state.history if r["Ngày"] == (unique_days[0] if unique_days else current_date_str)]
-            trend, trend_type = predict_vpd_trend_v3(h_latest, current_sim_datetime.hour, plant_matrix)
+            trend, _ = predict_vpd_trend_v3(h_latest, current_sim_datetime.hour, plant_matrix)
+            
+            # Sửa luôn lỗi lặp chữ "Xu hướng" ở phần text bắn về Telegram
+            clean_trend = trend.replace("Xu hướng:", "").strip()
             
             msg = (f"{warning_prefix}"
                    f"🌿 *VPD SMART ALARM (PHÁT HIỆN BẤT THƯỜNG)*\n⏰ {current_date_str} - {current_sim_datetime.strftime('%H:%M')} ({buoi_hien_tai})\n"
@@ -148,7 +145,7 @@ def trigger_new_data(plant_matrix):
                    f"*VPD thực tế:* *{new_vpd:.2f} kPa* (Ngưỡng an toàn: {v_min}-{v_max} kPa)\n"
                    f"📢 *Hiện trạng:* {status_text}\n"
                    f"🔍 *Phân tích:* _{reason_text}_\n"
-                   f"🔮 *Dự báo:* _{trend}_")
+                   f"🔮 *Dự báo:* _{clean_trend}_")
             send_telegram_message(TELE_TOKEN, TELE_CHAT_ID, msg)
     
     next_dt = current_sim_datetime + timedelta(minutes=10)
@@ -208,7 +205,7 @@ with tab_future:
         if st.session_state.stt_counter == 0: 
             trigger_new_data(st.session_state.current_matrix)
 
-        # KHỐI PHÓNG TO TOÀN BỘ CHỈ SỐ THEO YÊU CẦU CỦA BẠN
+        # KHỐI MONITOR REALTIME - ĐÃ GỘP Ô, XÓA ĐỌNG SƯƠNG, FIX LẶP XU HƯỚNG
         run_interval = 1 if st.session_state.is_running else 999999
         @st.fragment(run_every=run_interval)
         def live_monitor_panel():
@@ -220,12 +217,10 @@ with tab_future:
             
             sim_dt = datetime.strptime(st.session_state.simulated_time, "%Y-%m-%d %H:%M:%S")
             v_calc = calculate_vpd(st.session_state.temp, st.session_state.rh)
-            dp_calc = calculate_dew_point(st.session_state.temp, st.session_state.rh)
             
             buoi_hien_tai = get_biological_block(sim_dt.hour)
             v_min, v_max = st.session_state.current_matrix[buoi_hien_tai]
             
-            # Tính toán trạng thái để tìm nguyên nhân và xu hướng realtime
             if v_calc >= v_max + 0.5: stt = "🔴 Quá Nóng"
             elif v_calc > v_max: stt = "💛 Nóng"
             elif v_calc < v_min - 0.2: stt = "🔵 Quá Ẩm"
@@ -237,18 +232,22 @@ with tab_future:
             unique_days = sorted(list(set([r["Ngày"] for r in st.session_state.history])), reverse=True)
             current_date_str = sim_dt.strftime("Ngày %d/%m")
             h_latest = [r for r in st.session_state.history if r["Ngày"] == (unique_days[0] if unique_days else current_date_str)]
-            trend_rt, _ = predict_vpd_trend_v3(h_latest, sim_dt.hour, st.session_state.current_matrix)
             
-            # Khung HTML hiển thị cỡ chữ cực đại
+            trend_raw, _ = predict_vpd_trend_v3(h_latest, sim_dt.hour, st.session_state.current_matrix)
+            # Tiến hành cắt bỏ chuỗi thừa nếu hàm phân tích trả về có chữ "Xu hướng:"
+            clean_trend_rt = trend_raw.replace("Xu hướng:", "").strip()
+            
             with st.container(border=True):
                 st.markdown(f"⏰ **Thời gian:** `{sim_dt.strftime('%H:%M')}` | ⏳ **Chu kỳ kế:** `{st.session_state.countdown}s`")
                 st.markdown(f"""
                 <div class="big-vpd-box">
                     <div class="big-vpd-title">🌿 CHỈ SỐ VPD THỰC TẾ TRÊN LÁ</div>
                     <div class="big-vpd-value">{v_calc:.2f} kPa</div>
-                    <div class="big-env-value">🌡️ {st.session_state.temp}°C  &nbsp;|&nbsp;  💧 {st.session_state.rh}% &nbsp;|&nbsp; 🥶 Đọng sương: {dp_calc}°C</div>
-                    <div><span class="reason-badge">🔍 {reason_rt}</span></div>
-                    <div><span class="trend-badge">🔮 Xu hướng: {trend_rt}</span></div>
+                    <div class="big-env-value">🌡️ {st.session_state.temp}°C  &nbsp;|&nbsp;  💧 {st.session_state.rh}%</div>
+                    <div class="analysis-merge-box">
+                        🔍 <b>Phân tích:</b> {reason_rt}<br>
+                        🔮 <b>Xu hướng:</b> {clean_trend_rt}
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
         live_monitor_panel()
@@ -277,7 +276,7 @@ with tab_future:
                 if cur_v - (v_min - 0.2) <= 0.1:
                     st.markdown(f"<div class='danger-box-darkblue'>⚠️ SẮP QUÁ ẨM (Cách ranh giới đọng sương {(cur_v-(v_min-0.2)):.2f} kPa): Bật toàn bộ quạt hút cưỡng bức xả ẩm!</div>", unsafe_allow_html=True)
                 else:
-                    st.markdown(f"<div class='danger-box-lightblue'></div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='danger-box-lightblue'>🌐 ẨM ({sub_reason}): Hé bớt rèm hông tăng lưu thông không khí tự nhiên tự hủy ẩm.</div>", unsafe_allow_html=True)
             else:
                 st.success("🟩 LÝ TƯỞNG: Môi trường hoàn hảo cho cây quang hợp. Duy trì trạng thái ổn định.")
 
