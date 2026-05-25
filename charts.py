@@ -23,7 +23,6 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
         {"start": hot_limit, "end": 2.5, "Trạng thái": "🔴 Quá Nóng"}            
     ])
 
-    # Lớp nền màu đậm 100% nằm ngang
     background = alt.Chart(zones).mark_rect(opacity=1.0).encode(
         y=alt.Y('start:Q', scale=alt.Scale(domain=[0.0, 2.5]), title="Chỉ số VPD (kPa)"),
         y2='end:Q',
@@ -35,13 +34,10 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
                         legend=alt.Legend(title="Màu Cảnh Báo", orient="top", direction="horizontal"))
     )
 
-    # Lớp các đường giới hạn ngang đứt nét màu đen
     horiz_rules_data = pd.DataFrame([{"y": wet_limit}, {"y": vpd_min}, {"y": vpd_max}, {"y": hot_limit}])
     horiz_rules = alt.Chart(horiz_rules_data).mark_rule(stroke="#17202A", strokeDash=[4, 3], strokeWidth=1.2).encode(y='y:Q')
 
     # 2. ĐƯỜNG NÉT ĐỨT DỌC PHÂN CHIA CÁC BUỔI TRÊN TRỤC X
-    # Định nghĩa các mốc giờ ranh giới có trong dữ liệu thực tế
-    # Định dạng các điểm mốc thời gian để vẽ vạch đứng dọc cắt qua đồ thị
     time_lines = pd.DataFrame([
         {"Giờ": "05:00", "Nhãn": "🌅 SÁNG (5h)"},
         {"Giờ": "10:00", "Nhãn": "☀️ TRƯA (10h)"},
@@ -50,11 +46,9 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
         {"Giờ": "23:00", "Nhãn": "🌙 KHUYA (23h)"}
     ])
     
-    # Chỉ lấy các mốc giờ nếu nó thực sự tồn tại trong tập dữ liệu hiển thị hiện tại để tránh lỗi lệch trục
     existing_hours = df_chart['Hiển thị Giờ'].unique()
     time_lines_filtered = time_lines[time_lines['Giờ'].isin(existing_hours)].copy()
 
-    # Tạo vạch dọc đứt nét màu xám đậm chia chu kỳ sinh học
     vert_rules = alt.Chart(time_lines_filtered).mark_rule(
         stroke="#2C3E50", 
         strokeDash=[6, 4], 
@@ -63,11 +57,10 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
         x=alt.X('Giờ:N', sort=None)
     )
 
-    # Tạo chữ ghi chú tiêu đề buổi ở phía trên đỉnh biểu đồ
     vert_texts = alt.Chart(time_lines_filtered).mark_text(
         align='left',
         dx=5,
-        dy=-175, # Đẩy chữ lên sát mép trên đồ thị
+        dy=-175, 
         fontSize=11,
         fontWeight='bold',
         color='#17202A',
@@ -77,7 +70,7 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
         text='Nhãn:N'
     )
 
-    # 3. ĐƯỜNG TUYẾN TÍNH LIỀN MẠCH NỐI TOÀN BỘ CÁC ĐIỂM DỮ LIỆU CỦA NGÀY
+    # 3. ĐƯỜNG TUYẾN TÍNH LIỀN MẠCH
     line = alt.Chart(df_chart).mark_line(
         point=alt.OverlayMarkDef(color="#FFFFFF", size=65, filled=True, stroke="#17202A", strokeWidth=1.5), 
         color="#FFFFFF", 
@@ -88,9 +81,8 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
         tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)', 'Độ ẩm (%)', 'VPD (kPa)', 'Trạng thái']
     )
 
-    # GỘP TẤT CẢ LẠI THÀNH MỘT KHUNG LIỀN MẠCH DUY NHẤT
     final_chart = alt.layer(background, horiz_rules, vert_rules, vert_texts, line, data=df_chart).properties(
-        width=850, # Dàn rộng thoải mái sang bên phải không sợ vỡ khung
+        width=850, 
         height=390,
         title=alt.TitleParams(
             text="BIỂU ĐỒ CHỈ SỐ VPD LIỀN MẠCH THEO CHU KỲ SINH HỌC TOÀN NGÀY",
