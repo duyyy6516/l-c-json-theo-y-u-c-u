@@ -226,7 +226,7 @@ with tab_future:
 
 
 # --------------------------------------------------------
-# 📁 TAB 2: UPLOAD & BULK FILE ANALYTICS (BỔ SUNG CHẾ ĐỘ LỌC KHOẢNG NGÀY TIẾP DIỄN)
+# 📁 TAB 2: UPLOAD & BULK FILE ANALYTICS (TỰ ĐỘNG CHUẨN HÓA KHI TRÊN 2 NGÀY)
 # --------------------------------------------------------
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 19px;'>📁 TỰ ĐỘNG PHÂN TÍCH FILE IOT NHÀ KÍNH</h3>", unsafe_allow_html=True)
@@ -320,7 +320,6 @@ with tab_past:
                 df_raw_calc["only_date"] = df_raw_calc["datetime_internal"].dt.date
                 available_dates = sorted(df_raw_calc["only_date"].unique())
                 
-                # --- LOGIC XỬ LÝ CÁC LỰA CHỌN BỘ LỌC KHOẢNG THỜI GIAN THEO YÊU CẦU ---
                 if "Tự chọn một ngày cụ thể" in time_filter_option:
                     selected_date = st.date_input("👇 Chọn ngày trích xuất dữ liệu trên lịch:", value=available_dates[-1] if available_dates else datetime.now().date())
                     df_raw_calc = df_raw_calc[df_raw_calc["only_date"] == selected_date]
@@ -335,9 +334,12 @@ with tab_past:
                     end_date = start_date + timedelta(days=6)
                     df_raw_calc = df_raw_calc[(df_raw_calc["only_date"] >= start_date) & (df_raw_calc["only_date"] <= end_date)]
                     
+                elif "Xem toàn bộ dữ liệu gốc" in time_filter_option:
+                    # Giữ nguyên toàn bộ dải ngày có trong file không lọc bớt ngày nào
+                    pass
                 else:
                     max_time_in_file = df_raw_calc["datetime_internal"].max()
-                    if "1 Day gần nhất" in time_filter_option or "1 Ngày gần nhất" in time_filter_option:
+                    if "1 Ngày gần nhất" in time_filter_option:
                         df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= (max_time_in_file - timedelta(days=1))]
                     elif "1 Tuần gần nhất" in time_filter_option:
                         df_raw_calc = df_raw_calc[df_raw_calc["datetime_internal"] >= (max_time_in_file - timedelta(days=7))]
@@ -352,17 +354,27 @@ with tab_past:
                 df_resample_input = df_raw_calc[["datetime_internal", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD_raw"]].copy()
                 df_resample_input.set_index("datetime_internal", inplace=True)
                 
-                # Gom gộp theo ngày đối với các chế độ xem nhiều ngày (> 2 ngày) để biểu đồ mượt mà không rối mắt
+                # --- THAY ĐỔI QUAN TRỌNG: GỘP DỮ LIỆU THÔNG MINH CHO CẢ CHẾ ĐỘ XEM TOÀN BỘ FILE ---
                 if any(k in time_filter_option for k in ["1 Tuần gần nhất", "1 Tháng gần nhất", "tiếp theo"]):
+                    # Nhiều ngày thì gộp gom trung bình theo Từng Ngày
                     df_resampled = df_resample_input.resample("1D").mean().dropna()
+                elif "Xem toàn bộ dữ liệu gốc" in time_filter_option:
+                    if unique_days_filtered > 2:
+                        # Nếu file gồm nhiều ngày, tự động gộp gom trung bình mỗi 1 Giờ để biểu đồ mượt mà
+                        df_resampled = df_resample_input.resample("1h").mean().dropna()
+                    else:
+                        # Nếu file ngắn (chỉ 1-2 ngày), gộp gom theo mốc 10 phút
+                        df_resampled = df_resample_input.resample("10min").mean().dropna()
                 elif "1 Ngày gần nhất" in time_filter_option:
                     df_resampled = df_resample_input.resample("10min").mean().dropna()
                 else:
                     df_resampled = df_resample_input.copy()
                 
                 df_resampled["datetime_internal"] = df_resampled.index
-                if any(k in time_filter_option for k in ["1 Tuần gần nhất", "1 Tháng gần nhất", "tiếp theo"]):
-                    df_resampled["Hiển thị Giờ"] = df_resampled["datetime_internal"].dt.strftime("%d/%m")
+                
+                # Định dạng nhãn trục thời gian dựa vào độ dài dữ liệu
+                if any(k in time_filter_option for k in ["1 Tuần gần nhất", "1 Tháng gần nhất", "tiếp theo"]) or ( "Xem toàn bộ dữ liệu gốc" in time_filter_option and unique_days_filtered > 2 ):
+                    df_resampled["Hiển thị Giờ"] = df_resampled["datetime_internal"].dt.strftime("%d/%m %H:%M")
                 else:
                     df_resampled["Hiển thị Giờ"] = df_resampled["datetime_internal"].dt.strftime("%H:%M")
                 df_resampled.reset_index(drop=True, inplace=True)
@@ -407,7 +419,7 @@ with tab_past:
                 with file_sub_tab3: st.altair_chart(draw_humidity_chart(df_processed), use_container_width=True)
                 with file_sub_tab4: st.altair_chart(draw_combined_chart(df_processed), use_container_width=True)
                 
-            # --- BẢNG NHẬT KÝ THEO DÕI ĐIỂM GỘP CHU KỲ (TRIỆT TIÊU CHUỖI SỐ DƯ THỪA) ---
+            # --- BẢNG NHẬT KÝ THEO DÕI ĐIỂM GỘP CHU KỲ ---
             with res_right:
                 st.markdown("<div style='font-weight:bold; color:#1A5276; margin-bottom:5px;'>📋 BẢNG NHẬT KÝ THEO DÕI ĐIỂM GỘP CHU KỲ</div>", unsafe_allow_html=True)
                 preview_cols = ["Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]
