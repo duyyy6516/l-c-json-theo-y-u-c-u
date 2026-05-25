@@ -144,7 +144,11 @@ with tab_future:
                 if st.button("▶️ Bắt đầu", type="primary", use_container_width=True, key="btn_start", disabled=st.session_state.is_running):
                     if st.session_state.is_completed: setup_next_day()
                     st.session_state.is_running = True
-                    if st.session_state.stt_counter == 0: trigger_new_data(st.session_state.vpd_range_val[0], st.session_state.vpd_range_val[1])
+                   # ĐÃ SỬA: Mồi dữ liệu ban đầu chạy theo Ma trận Buổi Sinh Học
+if st.session_state.stt_counter == 0:
+    # Lấy cấu hình ma trận mặc định của cây đầu tiên để mồi dữ liệu
+    ma_tran_khoi_tao = MA_TRAN_MAC_DINH[list(MA_TRAN_MAC_DINH.keys())[0]]
+    trigger_new_data_dynamic(ma_tran_khoi_tao)
                     st.rerun()
             with col_btn2:
                 if st.button("⏸️ Tạm dừng", type="secondary", use_container_width=True, key="btn_stop", disabled=not st.session_state.is_running):
