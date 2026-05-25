@@ -3,43 +3,27 @@ import pandas as pd
 
 def draw_vpd_chart(df, vpd_min, vpd_max):
     """
-    Biểu đồ VPD phân khúc thời gian chuẩn Altair:
-    Tách nền và gom nhóm thành hộp thời gian (Facet Column) từ lớp ngoài cùng để tránh lỗi Layering.
+    Biểu đồ VPD liền mạch 1 trục thời gian duy nhất.
+    Có các đường nét đứt dọc phân chia ranh giới Sáng - Trưa - Chiều - Tối - Khuya kèm nhãn chữ.
     """
     if df.empty:
         return alt.Chart(pd.DataFrame()).mark_text().properties(title="Chưa có dữ liệu đồ thị")
 
     df_chart = df.copy()
 
-    # 1. ĐỊNH NGHĨA KHÚC BUỔI CHO TỪNG ĐIỂM DỮ LIỆU
-    def assign_time_block(dt):
-        try:
-            hour = dt.hour
-            if 5 <= hour < 10: return "🌅 Sáng (05h-10h)"
-            elif 10 <= hour < 15: return "☀️ Trưa (10h-15h)"
-            elif 15 <= hour < 19: return "🌇 Chiều (15h-19h)"
-            elif 19 <= hour < 23: return "🌌 Tối (19h-23h)"
-            else: return "🌙 Khuya (23h-05h)"
-        except:
-            return "Mô phỏng"
-
-    if "datetime_internal" in df_chart.columns:
-        df_chart["Khúc Buổi"] = df_chart["datetime_internal"].apply(assign_time_block)
-    else:
-        df_chart["Khúc Buổi"] = "Chưa phân khúc"
-
-    # 2. XÁC ĐỊNH CÁC NGƯỠNG CẢNH BÁO MÀU ĐẬM (Trục Y)
+    # 1. ĐỊNH NGHĨA CÁC VÙNG CẢNH BÁO MÀU NỀN NGANG (Trục Y)
     wet_limit = max(0.0, vpd_min - 0.2)
     hot_limit = vpd_max + 0.5
     
     zones = pd.DataFrame([
-        {"start": 0.0, "end": wet_limit, "Trạng thái": "🔵 Quá Ẩm", "color": "#0B5345"},      
-        {"start": wet_limit, "end": vpd_min, "Trạng thái": "🌐 Ẩm", "color": "#2980B9"},       
-        {"start": vpd_min, "end": vpd_max, "Trạng thái": "🟩 Lý Tưởng", "color": "#27AE60"},     
-        {"start": vpd_max, "end": hot_limit, "Trạng thái": "💛 Nóng", "color": "#F39C12"},          
-        {"start": hot_limit, "end": 3.0, "Trạng thái": "🔴 Quá Nóng", "color": "#C0392B"}            
+        {"start": 0.0, "end": wet_limit, "Trạng thái": "🔵 Quá Ẩm"},      
+        {"start": wet_limit, "end": vpd_min, "Trạng thái": "🌐 Ẩm"},       
+        {"start": vpd_min, "end": vpd_max, "Trạng thái": "🟩 Lý Tưởng"},     
+        {"start": vpd_max, "end": hot_limit, "Trạng thái": "💛 Nóng"},          
+        {"start": hot_limit, "end": 2.5, "Trạng thái": "🔴 Quá Nóng"}            
     ])
 
+    # Lớp nền màu đậm 100% nằm ngang
     background = alt.Chart(zones).mark_rect(opacity=1.0).encode(
         y=alt.Y('start:Q', scale=alt.Scale(domain=[0.0, 2.5]), title="Chỉ số VPD (kPa)"),
         y2='end:Q',
@@ -51,33 +35,66 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
                         legend=alt.Legend(title="Màu Cảnh Báo", orient="top", direction="horizontal"))
     )
 
-    rules_data = pd.DataFrame([{"y": wet_limit}, {"y": vpd_min}, {"y": vpd_max}, {"y": hot_limit}])
-    rules = alt.Chart(rules_data).mark_rule(stroke="#17202A", strokeDash=[4, 3], strokeWidth=1.5).encode(y='y:Q')
+    # Lớp các đường giới hạn ngang đứt nét màu đen
+    horiz_rules_data = pd.DataFrame([{"y": wet_limit}, {"y": vpd_min}, {"y": vpd_max}, {"y": hot_limit}])
+    horiz_rules = alt.Chart(horiz_rules_data).mark_rule(stroke="#17202A", strokeDash=[4, 3], strokeWidth=1.2).encode(y='y:Q')
 
+    # 2. ĐƯỜNG NÉT ĐỨT DỌC PHÂN CHIA CÁC BUỔI TRÊN TRỤC X
+    # Định nghĩa các mốc giờ ranh giới có trong dữ liệu thực tế
+    # Định dạng các điểm mốc thời gian để vẽ vạch đứng dọc cắt qua đồ thị
+    time_lines = pd.DataFrame([
+        {"Giờ": "05:00", "Nhãn": "🌅 SÁNG (5h)"},
+        {"Giờ": "10:00", "Nhãn": "☀️ TRƯA (10h)"},
+        {"Giờ": "15:00", "Nhãn": "🌇 CHIỀU (15h)"},
+        {"Giờ": "19:00", "Nhãn": "🌌 TỐI (19h)"},
+        {"Giờ": "23:00", "Nhãn": "🌙 KHUYA (23h)"}
+    ])
+    
+    # Chỉ lấy các mốc giờ nếu nó thực sự tồn tại trong tập dữ liệu hiển thị hiện tại để tránh lỗi lệch trục
+    existing_hours = df_chart['Hiển thị Giờ'].unique()
+    time_lines_filtered = time_lines[time_lines['Giờ'].isin(existing_hours)].copy()
+
+    # Tạo vạch dọc đứt nét màu xám đậm chia chu kỳ sinh học
+    vert_rules = alt.Chart(time_lines_filtered).mark_rule(
+        stroke="#2C3E50", 
+        strokeDash=[6, 4], 
+        strokeWidth=2.0
+    ).encode(
+        x=alt.X('Giờ:N', sort=None)
+    )
+
+    # Tạo chữ ghi chú tiêu đề buổi ở phía trên đỉnh biểu đồ
+    vert_texts = alt.Chart(time_lines_filtered).mark_text(
+        align='left',
+        dx=5,
+        dy=-175, # Đẩy chữ lên sát mép trên đồ thị
+        fontSize=11,
+        fontWeight='bold',
+        color='#17202A',
+        angle=0
+    ).encode(
+        x=alt.X('Giờ:N', sort=None),
+        text='Nhãn:N'
+    )
+
+    # 3. ĐƯỜNG TUYẾN TÍNH LIỀN MẠCH NỐI TOÀN BỘ CÁC ĐIỂM DỮ LIỆU CỦA NGÀY
     line = alt.Chart(df_chart).mark_line(
         point=alt.OverlayMarkDef(color="#FFFFFF", size=65, filled=True, stroke="#17202A", strokeWidth=1.5), 
         color="#FFFFFF", 
         strokeWidth=4.0
     ).encode(
-        x=alt.X('Hiển thị Giờ:N', sort=None, title="Thời gian chi tiết"),
+        x=alt.X('Hiển thị Giờ:N', sort=None, title="Thời gian chi tiết trong toàn bộ ngày"),
         y=alt.Y('VPD (kPa):Q'),
         tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)', 'Độ ẩm (%)', 'VPD (kPa)', 'Trạng thái']
     )
 
-    base_layered_chart = alt.layer(background, rules, line, data=df_chart).properties(
-        width=150, 
-        height=380
-    )
-
-    final_chart = base_layered_chart.facet(
-        column=alt.Column('Khúc Buổi:N', 
-                          sort=["🌅 Sáng (05h-10h)", "☀️ Trưa (10h-15h)", "🌇 Chiều (15h-19h)", "🌌 Tối (19h-23h)", "🌙 Khuya (23h-05h)"],
-                          title="KHÚC THỜI GIAN TRONG NGÀY",
-                          header=alt.Header(labelFontSize=12, labelFontWeight="bold", labelColor="#17202A"))
-    ).properties(
+    # GỘP TẤT CẢ LẠI THÀNH MỘT KHUNG LIỀN MẠCH DUY NHẤT
+    final_chart = alt.layer(background, horiz_rules, vert_rules, vert_texts, line, data=df_chart).properties(
+        width=850, # Dàn rộng thoải mái sang bên phải không sợ vỡ khung
+        height=390,
         title=alt.TitleParams(
-            text="MA TRẬN ĐỐI CHIẾU PHÂN KHÚC THỜI GIAN THEO BUỔI",
-            subtitle=f"Cận dưới: {vpd_min} kPa | Cận trên: {vpd_max} kPa | Khóa màu Solid đậm 100%",
+            text="BIỂU ĐỒ CHỈ SỐ VPD LIỀN MẠCH THEO CHU KỲ SINH HỌC TOÀN NGÀY",
+            subtitle=f"Cận dưới: {vpd_min} kPa | Cận trên: {vpd_max} kPa | Khóa dải màu Solid đậm | Vạch đứng phân buổi",
             anchor="start",
             fontSize=16,
             font="Segoe UI",
