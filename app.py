@@ -30,14 +30,14 @@ st.markdown("""
     .upload-header { font-size: 15px; font-weight: bold; color: #114B72; border-bottom: 2px solid #114B72; padding-bottom: 4px; margin-bottom: 10px; }
     .metric-card-upload { background-color: #EAEDED; border: 2px solid #BDC3C7; padding: 10px; border-radius: 6px; text-align: center; }
     
-    /* Giao diện giám sát lớn - Đã gộp tinh gọn */
+    /* Giao diện giám sát lớn - Ô gộp liền mạch */
     .big-vpd-box { background-color: #F8F9F9; border: 2px solid #2ECC71; border-radius: 8px; padding: 18px; text-align: center; margin-bottom: 10px; }
     .big-vpd-title { font-size: 14px; color: #7F8C8D; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
     .big-vpd-value { font-size: 45px; color: #27AE60; font-weight: 900; line-height: 1.0; margin-top: 5px; margin-bottom: 5px; }
     .big-env-value { font-size: 20px; color: #2C3E50; font-weight: bold; margin-bottom: 12px; }
     
-    /* Khung phân tích thông tin gộp chung làm một dòng thống nhất */
-    .analysis-merge-box { background-color: #EAECEE; color: #2C3E50; padding: 10px 14px; border-radius: 6px; font-size: 13.5px; font-weight: 500; text-align: left; border-left: 5px solid #27AE60; line-height: 1.5; }
+    /* Khung phân tích thông tin gộp chung tích hợp hướng xử lý */
+    .analysis-merge-box { background-color: #EAECEE; color: #2C3E50; padding: 12px 15px; border-radius: 6px; font-size: 13.5px; font-weight: 500; text-align: left; border-left: 5px solid #27AE60; line-height: 1.6; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -82,16 +82,33 @@ def style_status_rows(row):
     elif "Ẩm" in status: styles[loc] = 'background-color: #2980B9; color: #FFFFFF; font-weight: bold;'
     return styles
 
-def get_env_reason(status, temp, rh):
+def get_detailed_analysis_and_action(status, temp, rh):
+    """
+    Hàm bóc tách chính xác 4 trường hợp lỗi môi trường và xuất nguyên nhân + hành động
+    """
     if "Nóng" in status:
-        if temp > 28.0 and rh >= 50.0: return "🔥 Do Nhiệt độ bức xạ tăng cao"
-        elif rh < 50.0 and temp <= 28.0: return "🌵 Do Độ ẩm không khí tụt sâu (Hanh khô)"
-        else: return "💥 Do Nhiệt cao kết hợp Không khí khô gắt"
+        # TH1: Nóng do nhiệt độ không khí tăng cao
+        if temp >= 27.0:
+            reason = "🔥 Nóng do Nhiệt độ tăng cao (Bức xạ mặt trời hấp nhiệt nhà kính)"
+            action = "Kéo rèm chắn nắng đỉnh 70% + Bật quạt thông gió xả nhiệt gắt."
+        # TH2: Nóng do độ ẩm tụt sâu (Hanh khô)
+        else:
+            reason = "🌵 Nóng do Độ ẩm tụt quá thấp (Hệ thống thông gió quá mức/Khí hậu hanh)"
+            action = "Bật phun sương hạt mịn ngắt quãng để bù ẩm nhanh, tránh sốc khí khổng."
+        return reason, action
+        
     elif "Ẩm" in status:
-        if rh > 85.0 and temp >= 16.0: return "🌧️ Do Độ ẩm bão hòa (Tích tụ hơi nước)"
-        elif temp < 16.0 and rh <= 85.0: return "🥶 Do Trời lạnh sâu (Không khí co lại tụ nước)"
-        else: return "🌫️ Do Trời lạnh kết hợp Hơi ẩm bão hòa"
-    return "🟩 Môi trường nằm trong dải lý tưởng ổn định"
+        # TH3: Ẩm do độ ẩm bão hòa (Tích tụ hơi nước)
+        if rh >= 85.0:
+            reason = "🌧️ Ẩm do Độ ẩm bão hòa (Đất ướt đọng hơi nước, thiếu lưu thông khí)"
+            action = "Bật quạt đối lưu tán cây + Bật quạt hút xả ẩm cưỡng bức. Ngắt tưới."
+        # TH4: Ẩm do nhiệt độ giảm sâu (Trời lạnh)
+        else:
+            reason = "🥶 Ẩm do Nhiệt độ tụt thấp (Không khí co lại làm tăng độ ẩm tương đối)"
+            action = "Đóng kín rèm hông giữ nhiệt ấm + Đốt đèn nhiệt hoặc chạy quạt đảo khí trần."
+        return reason, action
+        
+    return "🟩 Môi trường dải lý tưởng ổn định", "Duy trì trạng thái tự động tự cân bằng hiện tại."
 
 def trigger_new_data(plant_matrix):
     current_sim_datetime = datetime.strptime(st.session_state.simulated_time, "%Y-%m-%d %H:%M:%S")
@@ -110,17 +127,17 @@ def trigger_new_data(plant_matrix):
     elif new_vpd < v_min: status_text = "🌐 Ẩm"
     else: status_text = "🟩 Lý Tưởng"
     
-    reason_text = get_env_reason(status_text, st.session_state.temp, st.session_state.rh)
+    reason_text, action_text = get_detailed_analysis_and_action(status_text, st.session_state.temp, st.session_state.rh)
     warning_prefix = ""
     is_near_danger = False
     
     if v_max < new_vpd < v_max + 0.5:
         if (v_max + 0.5) - new_vpd <= 0.1:
-            warning_prefix = f"⚠️ [CẢNH BÁO SỚM]: VPD tăng nhanh, SẮP CHẠM NGƯỠNG QUÁ NÓNG NGUY HIỂM!\n💡 {reason_text}\n"
+            warning_prefix = f"⚠️ [CẢNH BÁO SỚM]: SẮP CHẠM NGƯỠNG BIẾN CỐ NGUY HIỂM!\n"
             is_near_danger = True
     elif v_min - 0.2 < new_vpd < v_min:
         if new_vpd - (v_min - 0.2) <= 0.1:
-            warning_prefix = f"⚠️ [CẢNH BÁO SỚM]: Môi trường tích tụ nước, SẮP CHẠM NGƯỠNG QUÁ ẨM ĐỌNG SƯƠNG!\n💡 {reason_text}\n"
+            warning_prefix = f"⚠️ [CẢNH BÁO SỚM]: SẮP CHẠM NGƯỠNG ĐỌNG SƯƠNG BÙNG NẤM!\n"
             is_near_danger = True
 
     st.session_state.history.insert(0, {
@@ -135,16 +152,15 @@ def trigger_new_data(plant_matrix):
             unique_days = sorted(list(set([r["Ngày"] for r in st.session_state.history])), reverse=True)
             h_latest = [r for r in st.session_state.history if r["Ngày"] == (unique_days[0] if unique_days else current_date_str)]
             trend, _ = predict_vpd_trend_v3(h_latest, current_sim_datetime.hour, plant_matrix)
-            
-            # Sửa luôn lỗi lặp chữ "Xu hướng" ở phần text bắn về Telegram
             clean_trend = trend.replace("Xu hướng:", "").strip()
             
             msg = (f"{warning_prefix}"
-                   f"🌿 *VPD SMART ALARM (PHÁT HIỆN BẤT THƯỜNG)*\n⏰ {current_date_str} - {current_sim_datetime.strftime('%H:%M')} ({buoi_hien_tai})\n"
+                   f"🌿 *VPD SMART ALARM*\n⏰ {current_date_str} - {current_sim_datetime.strftime('%H:%M')} ({buoi_hien_tai})\n"
                    f"📊 Môi trường: {st.session_state.temp}°C | {st.session_state.rh}%\n"
-                   f"*VPD thực tế:* *{new_vpd:.2f} kPa* (Ngưỡng an toàn: {v_min}-{v_max} kPa)\n"
+                   f"*VPD thực tế:* *{new_vpd:.2f} kPa* (Chuẩn: {v_min}-{v_max})\n"
                    f"📢 *Hiện trạng:* {status_text}\n"
-                   f"🔍 *Phân tích:* _{reason_text}_\n"
+                   f"🔍 *Nguyên nhân:* _{reason_text}_\n"
+                   f"🛠️ *Hướng xử lý:* *{action_text}*\n"
                    f"🔮 *Dự báo:* _{clean_trend}_")
             send_telegram_message(TELE_TOKEN, TELE_CHAT_ID, msg)
     
@@ -205,7 +221,7 @@ with tab_future:
         if st.session_state.stt_counter == 0: 
             trigger_new_data(st.session_state.current_matrix)
 
-        # KHỐI MONITOR REALTIME - ĐÃ GỘP Ô, XÓA ĐỌNG SƯƠNG, FIX LẶP XU HƯỚNG
+        # KHỐI MONITOR REALTIME - ĐÃ TÍCH HỢP 4 HƯỚNG XỬ LÝ VÀO Ô GỘP CHUNG CHUYÊN NGHIỆP
         run_interval = 1 if st.session_state.is_running else 999999
         @st.fragment(run_every=run_interval)
         def live_monitor_panel():
@@ -227,14 +243,14 @@ with tab_future:
             elif v_calc < v_min: stt = "🌐 Ẩm"
             else: stt = "🟩 Lý Tưởng"
             
-            reason_rt = get_env_reason(stt, st.session_state.temp, st.session_state.rh)
+            # Gọi hàm bóc tách 4 loại lỗi môi trường kèm hướng xử lý phần cứng
+            reason_rt, action_rt = get_detailed_analysis_and_action(stt, st.session_state.temp, st.session_state.rh)
             
             unique_days = sorted(list(set([r["Ngày"] for r in st.session_state.history])), reverse=True)
             current_date_str = sim_dt.strftime("Ngày %d/%m")
             h_latest = [r for r in st.session_state.history if r["Ngày"] == (unique_days[0] if unique_days else current_date_str)]
             
             trend_raw, _ = predict_vpd_trend_v3(h_latest, sim_dt.hour, st.session_state.current_matrix)
-            # Tiến hành cắt bỏ chuỗi thừa nếu hàm phân tích trả về có chữ "Xu hướng:"
             clean_trend_rt = trend_raw.replace("Xu hướng:", "").strip()
             
             with st.container(border=True):
@@ -245,7 +261,8 @@ with tab_future:
                     <div class="big-vpd-value">{v_calc:.2f} kPa</div>
                     <div class="big-env-value">🌡️ {st.session_state.temp}°C  &nbsp;|&nbsp;  💧 {st.session_state.rh}%</div>
                     <div class="analysis-merge-box">
-                        🔍 <b>Phân tích:</b> {reason_rt}<br>
+                        🔍 <b>Lý do:</b> {reason_rt}<br>
+                        🛠️ <b>Hướng xử lý:</b> <span style="color:#C0392B; font-weight:bold;">{action_rt}</span><br>
                         🔮 <b>Xu hướng:</b> {clean_trend_rt}
                     </div>
                 </div>
@@ -486,7 +503,7 @@ with tab_past:
                 st.dataframe(df_processed[preview_cols].style.apply(style_status_rows, axis=1), use_container_width=True, hide_index=True, height=270)
 
             st.markdown("---")
-            st.markdown("##### 📊 BÁO CÁO PHÂN TÍCH TỔNG HỢP THEO BUỔI CHU KỲ (Dữ liệu gốc từ File)")
+            st.markdown("##### 📊 BÁO CÁO PHÁN QUYẾT MA TRẬN BUỔI TỔNG HỢP")
             if len(df_for_block_analysis) > 0:
                 df_block_report = analyze_day_by_blocks_rt(df_for_block_analysis.assign(Ngày="Dữ liệu File"), st.session_state.file_matrix, "Dữ liệu File")
                 st.dataframe(df_block_report, use_container_width=True, hide_index=True)
