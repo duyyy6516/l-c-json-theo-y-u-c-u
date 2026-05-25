@@ -4,7 +4,7 @@ import pandas as pd
 def draw_vpd_chart(df, v_min=None, v_max=None):
     """
     Vẽ đường diễn biến VPD phong cách tối giản tuyệt đối (Minimalism).
-    Không màu nền, không đổi màu chấm tròn, không bảng chú thích (Legend).
+    Đã tích hợp tính năng Phóng to / Thu nhỏ / Di chuyển linh hoạt (Interactive).
     """
     if df.empty:
         return alt.Chart(pd.DataFrame()).mark_blank()
@@ -43,7 +43,7 @@ def draw_vpd_chart(df, v_min=None, v_max=None):
 
     # 2. Đường đồ thị chính: Màu xanh lục đậm mượt mà
     vpd_line = base.mark_line(
-        color='#27AE60', \
+        color='#27AE60', 
         strokeWidth=3.5, 
         interpolate='monotone'
     ).encode(
@@ -61,17 +61,20 @@ def draw_vpd_chart(df, v_min=None, v_max=None):
         y=alt.Y('VPD (kPa):Q')
     )
 
+    # Lồng ghép và tối ưu căn lề tiêu đề + Kích hoạt tính năng INTERACTIVE (Phóng to/Thu nhỏ)
     final_chart = alt.layer(vpd_line, vpd_points, *rule_charts).properties(
         title=alt.TitleParams(
             text='📉 BIỂU ĐỒ THEO DÕI SỨC KHỎE CÂY TRỒNG (VPD THỰC TẾ)',
-            subtitle='Đường nét liền biểu thị diễn biến chỉ số VPD thực tế trong ngày',
+            subtitle='Đường nét liền biểu thị diễn biến chỉ số VPD thực tế trong ngày (Cuộn chuột để Phóng to/Thu nhỏ)',
             anchor='start',
-            fontSize=14,
-            subtitleFontSize=11,
-            subtitleColor='#566573',
             offset=15
         ),
         height=320
+    ).interactive().configure_title(
+        fontSize=14,
+        subtitleFontSize=11,
+        subtitleColor='#566573',
+        dy=-5  # Đẩy khoảng cách chữ lên trên để không bị dính vào đồ thị
     ).configure_view(
         strokeWidth=0
     )
@@ -82,7 +85,7 @@ def draw_vpd_chart(df, v_min=None, v_max=None):
 def draw_combined_temp_humidity_chart(df):
     """
     Vẽ biểu đồ tương quan Nhiệt - Ẩm trục kép song song dạng Đường (Line Chart).
-    Sửa triệt để lỗi che khuất khúc đồ thị bằng cách để trục Y tự động co giãn (Auto-scale).
+    Sửa triệt để lỗi che khuất chữ tiêu đề và kích hoạt zoom tương tác toàn diện.
     """
     if df.empty:
         return alt.Chart(pd.DataFrame()).mark_blank()
@@ -107,10 +110,9 @@ def draw_combined_temp_humidity_chart(df):
         x=alt.X('Hiển thị Giờ:O', title='Mốc Thời Gian Trong Ngày', axis=x_axis_config)
     )
 
-    # LỚP ĐỘ ẨM: Chuyển hoàn toàn sang đường Line xanh dương, tự động co giãn theo biên độ thực tế
+    # LỚP ĐỘ ẨM: Tự động co giãn theo biên độ thực tế
     h_min = float(df['Độ ẩm (%)'].min() - 5)
     h_max = float(df['Độ ẩm (%)'].max() + 5)
-    # Khống chế biên an toàn không vượt quá 100% hoặc dưới 0%
     h_min = max(0.0, h_min)
     h_max = min(100.0, h_max)
 
@@ -134,7 +136,7 @@ def draw_combined_temp_humidity_chart(df):
         y=alt.Y('Độ ẩm (%):Q')
     )
 
-    # LỚP NHIỆT ĐỘ: Đường Line đỏ rực rỡ độc lập trục bên trái
+    # LỚP NHIỆT ĐỘ: Đường màu đỏ trục trái
     t_min = float(df['Nhiệt độ (°C)'].min() - 2)
     t_max = float(df['Nhiệt độ (°C)'].max() + 2)
 
@@ -158,7 +160,7 @@ def draw_combined_temp_humidity_chart(df):
         y=alt.Y('Nhiệt độ (°C):Q')
     )
 
-    # Tích hợp trục kép độc lập hoàn toàn
+    # Tích hợp trục kép độc lập, gán cấu hình lề tiêu đề an toàn và cho phép Zoom
     final_combined = alt.layer(
         alt.layer(humidity_line, humidity_points),
         alt.layer(temp_line, temp_points)
@@ -167,14 +169,16 @@ def draw_combined_temp_humidity_chart(df):
     ).properties(
         title=alt.TitleParams(
             text='🌡️ ĐỘNG HỌC MÔI TRƯỜNG: MỐI QUAN HỆ NHIỆT - ẨM CHU KỲ',
-            subtitle='Đường Đỏ: Nhiệt độ (°C) [Trục trái]  |  Đường Xanh: Độ ẩm (%) [Trục phải]',
+            subtitle='Đường Đỏ: Nhiệt độ (°C) [Trục trái]  |  Đường Xanh: Độ ẩm (%) [Trục phải] (Cuộn chuột để thu phóng)',
             anchor='start',
-            fontSize=14,
-            subtitleFontSize=11,
-            subtitleColor='#566573',
-            offset=15
+            offset=25  # Tăng khoảng cách lề bao quanh để bảo vệ phần chữ tiêu đề trục kép
         ),
         height=260
+    ).interactive().configure_title(
+        fontSize=14,
+        subtitleFontSize=11,
+        subtitleColor='#566573',
+        dy=-8  # Đẩy hẳn tiêu đề lên trên, tạo không gian thoáng 100% không lo che chữ
     )
 
     return final_combined
