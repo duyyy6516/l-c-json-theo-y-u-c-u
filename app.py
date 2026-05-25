@@ -29,7 +29,7 @@ st.markdown("""
     .danger-box-red { padding: 12px; background-color: #FFEBEE; border-left: 6px solid #FF1744; color: #B71C1C; font-weight: bold; font-size: 15px; border-radius: 4px; margin-bottom: 8px; }
     .danger-box-blue { padding: 12px; background-color: #E3F2FD; border-left: 6px solid #2979FF; color: #0D47A1; font-weight: bold; font-size: 15px; border-radius: 4px; margin-bottom: 8px; }
     
-    /* CSS Tinh chỉnh riêng cho phần tải file */
+    /* CSS cho phần tải file */
     .upload-header { font-size: 16px; font-weight: bold; color: #1B4F72; border-bottom: 2px solid #D4E6F1; padding-bottom: 5px; margin-bottom: 12px; }
     .metric-card-upload { background-color: #F4F6F7; border: 1px solid #E5E7E9; padding: 10px; border-radius: 6px; text-align: center; }
     </style>
@@ -103,7 +103,7 @@ def trigger_new_data(vpd_min, vpd_max):
 tab_future, tab_past = st.tabs(["🔮 XEM DỰ BÁO & THEO DÕI TƯƠNG LAI", "📁 TẢI FILE & PHÂN TÍCH LỊCH SỬ"])
 
 # --------------------------------------------------------
-# TAB 1: REALTIME MONITORING (Giữ nguyên chạy ổn định)
+# TAB 1: REALTIME MONITORING (Chạy chu kỳ ngày ổn định)
 # --------------------------------------------------------
 with tab_future:
     left_col, right_col = st.columns([3.5, 6.5])
@@ -213,12 +213,11 @@ with tab_future:
 
 
 # --------------------------------------------------------
-# 📁 TAB 2: UPLOAD & BULK FILE ANALYTICS (ĐÃ TINH CHỈNH ĐẸP MẮT)
+# 📁 TAB 2: UPLOAD & BULK FILE ANALYTICS (ĐÃ SỬA TRIỆT ĐỂ LỖI NHIỀU ĐIỂM)
 # --------------------------------------------------------
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 19px;'>📁 TỰ ĐỘNG PHÂN TÍCH FILE IOT NHÀ KÍNH</h3>", unsafe_allow_html=True)
     
-    # Chia đôi khu vực cấu hình phía trên cho gọn gàng
     top_left, top_right = st.columns([5, 5])
     
     with top_left:
@@ -239,19 +238,15 @@ with tab_past:
             st.markdown("<div class='upload-header'>📥 2. TẢI DỮ LIỆU ĐẦU VÀO</div>", unsafe_allow_html=True)
             uploaded_file = st.file_uploader("Kéo thả file IoT (JSON, CSV, hoặc Excel) vào đây:", type=["json", "csv", "xlsx"], label_visibility="collapsed")
             time_filter_option = st.selectbox(
-                "📆 Chế độ lọc dữ liệu thời gian:",
-                ["📊 Xem toàn bộ dữ liệu thô trong file", "📆 Tự chọn một ngày cụ thể trên lịch", "⏱️ 1 Ngày gần nhất (Gom trung bình 10 phút)", "📅 1 Tuần gần nhất", "🗓️ 1 Tháng gần nhất"]
+                "📆 Chế độ lọc và gộp dữ liệu chu kỳ:",
+                ["📊 Xem toàn bộ dữ liệu gốc của File", "📆 Tự chọn một ngày cụ thể trên lịch", "⏱️ 1 Ngày gần nhất (Gom trung bình 10 phút)", "📅 1 Tuần gần nhất (Gộp trung bình 1 Ngày / 1 Điểm)", "🗓️ 1 Tháng gần nhất (Gộp trung bình 1 Ngày / 1 Điểm)"]
             )
     
     if uploaded_file:
         try:
-            # Lô-gic đọc và phân tích file dữ liệu thô
             if uploaded_file.name.endswith('.json'):
                 json_data = json.load(uploaded_file)
-                if isinstance(json_data, dict) and not isinstance(list(json_data.values())[0], (dict, list)):
-                    df_upload = pd.DataFrame([json_data])
-                else:
-                    df_upload = pd.DataFrame(json_data)
+                df_upload = pd.DataFrame([json_data]) if isinstance(json_data, dict) and not isinstance(list(json_data.values())[0], (dict, list)) else pd.DataFrame(json_data)
             elif uploaded_file.name.endswith('.csv'):
                 df_upload = pd.read_csv(uploaded_file)
             else:
@@ -299,6 +294,7 @@ with tab_past:
                 df_raw_calc["only_date"] = df_raw_calc["datetime_internal"].dt.date
                 available_dates = sorted(df_raw_calc["only_date"].unique())
                 
+                # Áp dụng bộ lọc khoảng cách thời gian trước khi Resample
                 if "Tự chọn một ngày cụ thể" in time_filter_option:
                     selected_date = st.date_input("👇 Chọn ngày trích xuất dữ liệu trên lịch:", value=available_dates[-1] if available_dates else datetime.now().date())
                     df_raw_calc = df_raw_calc[df_raw_calc["only_date"] == selected_date]
@@ -313,30 +309,59 @@ with tab_past:
 
             df_for_block_analysis = df_raw_calc.copy()
 
-            df_processed = df_raw_calc.copy()
-            df_processed["Hiển thị Giờ"] = df_processed["datetime_internal"].dt.strftime("%H:%M")
+            # --- FIX CHÍNH XÁC: GOM TRUNG BÌNH THEO ĐÚNG CHẾ ĐỘ XEM ĐỂ GIẢM ĐIỂM BIỂU ĐỒ ---
+            if len(df_raw_calc) > 0:
+                df_resample_input = df_raw_calc[["datetime_internal", "Nhiệt độ (°C)", "Độ ẩm (%)"]].copy()
+                df_resample_input.set_index("datetime_internal", inplace=True)
+                
+                if any(k in time_filter_option for k in ["1 Tuần gần nhất", "1 Tháng gần nhất"]):
+                    # Nếu xem chu kỳ dài (> 1 ngày), thực hiện gom dữ liệu trung bình theo Ngày (1d) để giảm điểm
+                    df_resampled = df_resample_input.resample("1D").mean().dropna()
+                elif "1 Ngày gần nhất" in time_filter_option:
+                    # Nếu xem 1 ngày gần nhất, gom theo 10 phút cho mượt
+                    df_resampled = df_resample_input.resample("10min").mean().dropna()
+                else:
+                    # Xem toàn bộ dữ liệu gốc
+                    df_resampled = df_resample_input.copy()
+                
+                df_resampled["datetime_internal"] = df_resampled.index
+                # Nếu là dữ liệu gộp theo ngày, định dạng nhãn trục X thành Ngày. Ngược lại định dạng Giờ.
+                if any(k in time_filter_option for k in ["1 Tuần gần nhất", "1 Tháng gần nhất"]):
+                    df_resampled["Hiển thị Giờ"] = df_resampled["datetime_internal"].dt.strftime("%d/%m")
+                else:
+                    df_resampled["Hiển thị Giờ"] = df_resampled["datetime_internal"].dt.strftime("%H:%M")
+                df_resampled.reset_index(drop=True, inplace=True)
+            else:
+                df_resampled = pd.DataFrame(columns=["datetime_internal", "Nhiệt độ (°C)", "Độ ẩm (%)", "Hiển thị Giờ"])
+
+            # Gán nguồn dữ liệu đã qua xử lý Gộp Trung Bình vào df_processed
+            df_processed = pd.DataFrame()
+            df_processed["datetime_internal"] = df_resampled["datetime_internal"]
+            df_processed["Nhiệt độ (°C)"] = df_resampled["Nhiệt độ (°C)"].round(2)
+            df_processed["Độ ẩm (%)"] = df_resampled["Độ ẩm (%)"].round(2)
+            df_processed["Hiển thị Giờ"] = df_resampled["Hiển thị Giờ"]
+            
             df_processed["VPD (kPa)"] = df_processed.apply(lambda row: round(calculate_vpd(row["Nhiệt độ (°C)"], row["Độ ẩm (%)"]), 2), axis=1)
             df_processed["Ngày"] = "Dữ liệu File"
             df_processed["Trạng thái"] = df_processed["VPD (kPa)"].apply(lambda x: "⚠️ Quá ẩm" if x < file_vpd_min else ("✅ Lý tưởng" if x <= file_vpd_max else "🚨 Quá khô"))
             
-            # --- KHU VỰC THẺ TỔNG QUAN FILE TẢI LÊN (BỔ SUNG MỚI CHO ĐẸP VÀ CHUYÊN NGHIỆP) ---
-            st.markdown("<div style='margin-top:15px; margin-bottom:5px; font-weight:bold; color:#1A5276;'>📊 TỔNG QUAN FILE ĐÃ TẢI LÊN</div>", unsafe_allow_html=True)
+            # --- THỂ HIỆN KPIs THỐNG KÊ TỔNG QUAN ---
+            st.markdown("<div style='margin-top:15px; margin-bottom:5px; font-weight:bold; color:#1A5276;'>📊 TỔNG QUAN CHU KỲ SAU KHI GỘP SỐ LIỆU TỐI ƯU</div>", unsafe_allow_html=True)
             m_col1, m_col2, m_col3, m_col4 = st.columns(4)
             with m_col1:
-                st.markdown(f"<div class='metric-card-upload'><span style='font-size:12px;color:grey;'>📈 VPD TRUNG BÌNH</span><br><b style='font-size:18px;color:#2E7D32;'>{df_processed['VPD (kPa)'].mean():.2f} kPa</b></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='metric-card-upload'><span style='font-size:12px;color:grey;'>📈 VPD TRUNG BÌNH CHU KỲ</span><br><b style='font-size:18px;color:#2E7D32;'>{df_processed['VPD (kPa)'].mean():.2f} kPa</b></div>", unsafe_allow_html=True)
             with m_col2:
-                st.markdown(f"<div class='metric-card-upload'><span style='font-size:12px;color:grey;'>🌡️ NHIỆT ĐỘ CAO NHẤT</span><br><b style='font-size:18px;color:#FF4B4B;'>{df_processed['Nhiệt độ (°C)'].max():.1f} °C</b></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='metric-card-upload'><span style='font-size:12px;color:grey;'>🌡️ NHIỆT ĐỘ TRUNG BÌNH CHU KỲ</span><br><b style='font-size:18px;color:#FF4B4B;'>{df_processed['Nhiệt độ (°C)'].mean():.1f} °C</b></div>", unsafe_allow_html=True)
             with m_col3:
-                st.markdown(f"<div class='metric-card-upload'><span style='font-size:12px;color:grey;'>💧 ĐỘ ẨM THẤP NHẤT</span><br><b style='font-size:18px;color:#0068C9;'>{df_processed['Độ ẩm (%)'].min():.1f} %</b></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='metric-card-upload'><span style='font-size:12px;color:grey;'>💧 ĐỘ ẨM TRUNG BÌNH CHU KỲ</span><br><b style='font-size:18px;color:#0068C9;'>{df_processed['Độ ẩm (%)'].mean():.1f} %</b></div>", unsafe_allow_html=True)
             with m_col4:
-                st.markdown(f"<div class='metric-card-upload'><span style='font-size:12px;color:grey;'>📋 TỔNG SỐ BẢN GHI</span><br><b style='font-size:18px;color:#5D6D7E;'>{len(df_processed)} mốc</b></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='metric-card-upload'><span style='font-size:12px;color:grey;'>📋 SỐ ĐIỂM DỮ LIỆU TRÊN BIỂU ĐỒ</span><br><b style='font-size:18px;color:#5D6D7E;'>{len(df_processed)} điểm</b></div>", unsafe_allow_html=True)
 
             st.write("") 
             
-            # Chia cột hiển thị Biểu đồ và Bảng nhật ký dữ liệu
             res_left, res_right = st.columns([6.2, 3.8])
             with res_left:
-                st.markdown(f"<div style='font-weight:bold; color:#1A5276; margin-bottom:5px;'>📊 HỆ THỐNG BIỂU ĐỒ TRỰC QUAN CHI TIẾT</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='font-weight:bold; color:#1A5276; margin-bottom:5px;'>📊 HỆ THỐNG BIỂU ĐỒ TRỰC QUAN GỌN GÀNG</div>", unsafe_allow_html=True)
                 file_sub_tab1, file_sub_tab2, file_sub_tab3, file_sub_tab4 = st.tabs(["🎯 Chỉ số VPD", "🌡️ Nhiệt độ", "💧 Độ ẩm", "📊 Tổ hợp 3 chỉ số"])
                 with file_sub_tab1: st.altair_chart(draw_vpd_chart(df_processed, file_vpd_min, file_vpd_max), use_container_width=True)
                 with file_sub_tab2: st.altair_chart(draw_temperature_chart(df_processed), use_container_width=True)
@@ -344,32 +369,31 @@ with tab_past:
                 with file_sub_tab4: st.altair_chart(draw_combined_chart(df_processed), use_container_width=True)
                 
             with res_right:
-                st.markdown("<div style='font-weight:bold; color:#1A5276; margin-bottom:5px;'>📋 NHẬT KÝ SỐ LIỆU ĐÃ LỌC</div>", unsafe_allow_html=True)
+                st.markdown("<div style='font-weight:bold; color:#1A5276; margin-bottom:5px;'>📋 BẢNG NHẬT KÝ THEO DÕI ĐIỂM GỘP CHU KỲ</div>", unsafe_allow_html=True)
                 preview_cols = ["Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]
                 
-                # SỬ DỤNG st.dataframe CẢI TIẾN: Định dạng highlight màu trực quan, dễ nhìn hơn hẳn
                 st.dataframe(
-                    df_processed[preview_cols].head(150), 
+                    df_processed[preview_cols], 
                     use_container_width=True, 
                     hide_index=True,
                     height=290,
                     column_config={
+                        "Hiển thị Giờ": st.column_config.TextColumn(label="Mốc Chu Kỳ"),
                         "VPD (kPa)": st.column_config.NumberColumn(format="%.2f kPa"),
-                        "Trạng thái": st.column_config.SelectboxColumn(width="medium")
                     }
                 )
                 
                 st.download_button(
-                    label="📥 Xuất báo cáo tính toán sang file CSV",
+                    label="📥 Xuất báo cáo tính toán chu kỳ (.csv)",
                     data=df_processed.to_csv(index=False).encode('utf-8'),
-                    file_name=f"vpd_calculated_smart.csv",
+                    file_name=f"vpd_periodic_report.csv",
                     mime="text/csv",
                     use_container_width=True
                 )
 
-            # --- KHU VỰC BÁO CÁO PHÂN TÍCH THEO BUỔI ---
+            # --- BÁO CÁO PHÂN TÍCH THEO BUỔI ---
             st.markdown("---")
-            st.markdown(f"##### 📊 BÁO CÁO PHÂN TÍCH TỔNG HỢP THEO BUỔI CHU KỲ (Dữ liệu từ File)")
+            st.markdown(f"##### 📊 BÁO CÁO PHÂN TÍCH TỔNG HỢP THEO BUỔI CHU KỲ (Dữ liệu gốc từ File)")
             
             if len(df_for_block_analysis) > 0:
                 df_for_block_analysis["Hour"] = df_for_block_analysis["datetime_internal"].dt.hour
