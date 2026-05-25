@@ -4,7 +4,7 @@ import pandas as pd
 def draw_vpd_chart(df, v_min=None, v_max=None):
     """
     Vẽ đường diễn biến VPD phong cách tối giản tuyệt đối (Minimalism).
-    Sửa tận gốc lỗi TypeError bằng cách cấu hình view ở lớp ngoài cùng của vconcat.
+    Đã lược bỏ phần text tiêu đề phức tạp để tránh lỗi biên dịch Altair.
     """
     if df.empty:
         return alt.Chart(pd.DataFrame()).mark_blank()
@@ -14,18 +14,6 @@ def draw_vpd_chart(df, v_min=None, v_max=None):
     df_chart['Thời Gian Chuẩn'] = pd.to_datetime(df_chart['Hiển thị Giờ'], format='%H:%M', errors='coerce')
     df_chart = df_chart.dropna(subset=['Thời Gian Chuẩn']).sort_values('Thời Gian Chuẩn')
 
-    # 1. TẠO TIÊU ĐỀ ĐỘC LẬP: Đảm bảo hiển thị FULL 100% chữ, đứng riêng ở tầng trên
-    title_text = alt.Chart(pd.DataFrame([{}])).mark_text(
-        text='📉 BIỂU ĐỒ THEO DÕI SỨC KHỎE CÂY TRỒNG (VPD THỰC TẾ)',
-        dx=0, dy=0, fontSize=14, fontWeight='bold', color='#2C3E50', align='left'
-    ).properties(width='container', height=15)
-
-    subtitle_text = alt.Chart(pd.DataFrame([{}])).mark_text(
-        text='Cuộn chuột để phóng to/thu nhỏ, nhấn giữ chuột trái kéo qua lại để xem chi tiết',
-        dx=0, dy=0, fontSize=11, color='#566573', align='left'
-    ).properties(width='container', height=15)
-
-    # 2. XÂY DỰNG THÂN ĐỒ THỊ THÔ (Chưa cấu hình view để không gây lỗi vconcat)
     base = alt.Chart(df_chart).encode(
         x=alt.X('Thời Gian Chuẩn:T', 
                 title='Mốc Thời Gian Trong Ngày', 
@@ -52,21 +40,19 @@ def draw_vpd_chart(df, v_min=None, v_max=None):
         y=alt.Y('VPD (kPa):Q')
     )
 
-    body_chart = alt.layer(vpd_line, vpd_points, *rule_charts).properties(
-        height=300
-    ).interactive()
-
-    # 3. GỘP BIỂU ĐỒ VÀ TIÊU ĐỀ, SAU ĐÓ MỚI CẤU HÌNH VIEW NGOÀI CÙNG (Sửa lỗi hoàn toàn)
-    final_chart = alt.vconcat(title_text, subtitle_text, body_chart).spacing(5).configure_view(
+    final_chart = alt.layer(vpd_line, vpd_points, *rule_charts).properties(
+        height=320
+    ).interactive().configure_view(
         strokeWidth=0
     )
+    
     return final_chart
 
 
 def draw_combined_temp_humidity_chart(df):
     """
     Vẽ biểu đồ tương quan Nhiệt - Ẩm trục kép dạng Đường (Line Chart).
-    Giải quyết triệt để lỗi ăn mất tiêu đề và tương thích tuyệt đối với Altair v6.
+    Tối ưu hóa gọn gàng trục Y độc lập, hỗ trợ thu phóng cuộn chuột.
     """
     if df.empty:
         return alt.Chart(pd.DataFrame()).mark_blank()
@@ -76,18 +62,6 @@ def draw_combined_temp_humidity_chart(df):
     df_chart['Thời Gian Chuẩn'] = pd.to_datetime(df_chart['Hiển thị Giờ'], format='%H:%M', errors='coerce')
     df_chart = df_chart.dropna(subset=['Thời Gian Chuẩn']).sort_values('Thời Gian Chuẩn')
 
-    # 1. TẠO TIÊU ĐỀ ĐỘC LẬP: Hiển thị trọn vẹn 100% không lo bị nuốt chữ
-    title_text = alt.Chart(pd.DataFrame([{}])).mark_text(
-        text='🌡️ ĐỘNG HỌC MÔI TRƯỜNG: MỐI QUAN HỆ NHIỆT - ẨM CHU KỲ',
-        dx=0, dy=0, fontSize=14, fontWeight='bold', color='#2C3E50', align='left'
-    ).properties(width='container', height=15)
-
-    subtitle_text = alt.Chart(pd.DataFrame([{}])).mark_text(
-        text='Đường Đỏ: Nhiệt độ (°C) [Trục trái]  |  Đường Xanh: Độ ẩm (%) [Trục phải] (Cuộn chuột để thu phóng)',
-        dx=0, dy=0, fontSize=11, color='#566573', align='left'
-    ).properties(width='container', height=15)
-
-    # 2. XÂY DỰNG THÂN ĐỒ THỊ TRỤC KÉP THÔ
     base = alt.Chart(df_chart).encode(
         x=alt.X('Thời Gian Chuẩn:T', 
                 title='Mốc Thời Gian Trong Ngày', 
@@ -125,17 +99,15 @@ def draw_combined_temp_humidity_chart(df):
     )
 
     # Hợp nhất trục độc lập và bật tính năng tương tác thu phóng
-    body_chart = alt.layer(
+    final_combined = alt.layer(
         alt.layer(humidity_line, humidity_points),
         alt.layer(temp_line, temp_points)
     ).resolve_scale(
         y='independent'
     ).properties(
-        height=260
-    ).interactive()
-
-    # 3. KẾT HỢP VÀ ĐỂ HÀM CẤU HÌNH GIAO DIỆN Ở NGOÀI CÙNG
-    final_combined = alt.vconcat(title_text, subtitle_text, body_chart).spacing(5).configure_view(
+        height=280
+    ).interactive().configure_view(
         strokeWidth=0
     )
+
     return final_combined
