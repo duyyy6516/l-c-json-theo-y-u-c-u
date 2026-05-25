@@ -3,23 +3,13 @@ import pandas as pd
 
 def draw_vpd_chart(df, v_min=None, v_max=None):
     """
-    Vẽ đường diễn biến VPD phong cách tối giản (Minimalism).
-    Đã bỏ hoàn toàn các khối màu nền phân chia phân vùng theo yêu cầu.
+    Vẽ đường diễn biến VPD phong cách tối giản tuyệt đối (Minimalism).
+    Đã bỏ phân chia màu nền và bỏ toàn bộ bảng chú thích trạng thái sinh học theo yêu cầu.
     """
     if df.empty:
         return alt.Chart(pd.DataFrame()).mark_blank()
 
-    # Thêm cột phân loại vùng sinh học để làm màu cho các điểm Node chấm tròn (không làm rối nền)
-    def classify_zone(vpd):
-        if vpd >= 2.0: return "🔴 Stress Khô Hạn (>2.0)"
-        elif vpd >= 1.6: return "🟠 Nguy cơ Khô (1.6 - 2.0)"
-        elif vpd >= 0.8: return "🟢 Ngưỡng Lý Tưởng (0.8 - 1.6)"
-        elif vpd >= 0.4: return "🌐 Ngưỡng Ẩm An Toàn (0.4 - 0.8)"
-        else: return "🔵 Quá Ẩm - Nguy cơ Nấm (<0.4)"
-        
-    df['Vùng Sinh Học'] = df['VPD (kPa)'].apply(classify_zone)
-
-    # Lấy mốc thời gian và ép kiểu về List Python thuần để tránh lỗi hệ thống
+    # Lấy mốc thời gian và ép kiểu về List Python thuần để tránh lỗi hệ thống trục X
     unique_hours = df['Hiển thị Giờ'].unique()
     if len(unique_hours) > 15:
         axis_values = list(unique_hours[::2])
@@ -41,7 +31,7 @@ def draw_vpd_chart(df, v_min=None, v_max=None):
         x=alt.X('Hiển thị Giờ:O', title='Mốc Thời Gian Trong Ngày', axis=x_axis_config)
     )
 
-    # 1. Đường nét đứt động thể hiện ngưỡng tối ưu cố định của loại cây (Nếu có)
+    # 1. Đường nét đứt thể hiện ngưỡng tối ưu (Nếu có truyền vào)
     rule_charts = []
     if v_min is not None and v_max is not None:
         rule_min = alt.Chart(pd.DataFrame({'y': [float(v_min)]})).mark_rule(
@@ -52,7 +42,7 @@ def draw_vpd_chart(df, v_min=None, v_max=None):
         ).encode(y='y:Q')
         rule_charts = [rule_min, rule_max]
 
-    # 2. ĐƯỜNG ĐỒ THỊ CHÍNH: Đường line màu xanh lục đậm nét, mượt mà chạy trên nền trắng
+    # 2. ĐƯỜNG ĐỒ THỊ CHÍNH: Màu xanh lục đậm nét mượt mà
     vpd_line = base.mark_line(
         color='#27AE60', 
         strokeWidth=3.5, 
@@ -61,31 +51,22 @@ def draw_vpd_chart(df, v_min=None, v_max=None):
         y=alt.Y('VPD (kPa):Q', title='Áp Suất Thâm Hụt Hơi VPD (kPa)', scale=alt.Scale(domain=[0.0, 2.5]))
     )
 
-    # 3. ĐIỂM CHẤM TRÒN: Đổi màu theo trạng thái để người xem nhìn phát biết ngay lúc nào cây gặp sự cố
+    # 3. CÁC ĐIỂM CHẤM TRÒN: Đồng nhất một màu xanh lục, không đổi màu sinh học, không tạo chú thích (Legend)
     vpd_points = base.mark_point(
-        size=80, 
+        size=60, 
         filled=True, 
-        stroke='#2C3E50', 
-        strokeWidth=1
+        color='#27AE60',
+        fill='#FFFFFF',
+        strokeWidth=2
     ).encode(
-        y=alt.Y('VPD (kPa):Q'),
-        color=alt.Color('Vùng Sinh Học:N', scale=alt.Scale(
-            domain=[
-                "🔴 Stress Khô Hạn (>2.0)", 
-                "🟠 Nguy cơ Khô (1.6 - 2.0)", 
-                "🟢 Ngưỡng Lý Tưởng (0.8 - 1.6)", 
-                "🌐 Ngưỡng Ẩm An Toàn (0.4 - 0.8)", 
-                "🔵 Quá Ẩm - Nguy cơ Nấm (<0.4)"
-            ],
-            range=['#C0392B', '#E67E22', '#27AE60', '#2980B9', '#1A5276']
-        ), title="Trạng Thái Sinh Học")
+        y=alt.Y('VPD (kPa):Q')
     )
 
     # Lồng ghép các thành phần
     final_chart = alt.layer(vpd_line, vpd_points, *rule_charts).properties(
         title=alt.TitleParams(
             text='📉 BIỂU ĐỒ THEO DÕI SỨC KHỎE CÂY TRỒNG (VPD THỰC TẾ)',
-            subtitle='Đường nét liền biểu thị diễn biến VPD thực tế trong nhà màng',
+            subtitle='Đường nét liền biểu thị diễn biến chỉ số VPD thực tế trong ngày',
             anchor='start',
             fontSize=14,
             subtitleFontSize=11,
@@ -127,7 +108,7 @@ def draw_combined_temp_humidity_chart(df):
         x=alt.X('Hiển thị Giờ:O', title='Mốc Thời Gian Trong Ngày', axis=x_axis_config)
     )
 
-    # Khối độ ẩm: Diện tích mờ màu xanh dương phẳng thoáng đãng
+    # Lớp độ ẩm: Vùng diện tích mờ màu xanh dương phẳng thoáng đãng
     humidity_area = base.mark_area(
         color='#AED6F1',
         opacity=0.45,
@@ -143,7 +124,7 @@ def draw_combined_temp_humidity_chart(df):
         y=alt.Y('Độ ẩm (%):Q')
     )
 
-    # Khối nhiệt độ: Đường Line đỏ rực rỡ chạy đè lên trên lớp ẩm
+    # Lớp nhiệt độ: Đường Line đỏ rực rỡ chạy đè lên trên lớp ẩm
     temp_line = base.mark_line(
         color='#E74C3C', 
         strokeWidth=3.5,
