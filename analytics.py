@@ -111,7 +111,7 @@ def analyze_day_by_blocks_rt(history_list, plant_matrix, target_day_str):
         elif avg_v > vpd_max:
             status = "💛 Nóng"
             sol = "Kéo lưới cắt nắng, kích hoạt nhẹ phun sương giữ ẩm."
-        elif avg_v < vpd_min - 0.2:
+        elif avg_v < vpn_min - 0.2 if 'vpn_min' in locals() else avg_v < vpd_min - 0.2:
             status = "🔵 Quá Ẩm"
             sol = "Bật toàn bộ hệ thống quạt đối lưu, kích hoạt sưởi nhẹ nếu có."
         elif avg_v < vpd_min:
