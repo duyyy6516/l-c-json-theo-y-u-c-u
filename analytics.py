@@ -10,14 +10,14 @@ def get_biological_block(hour):
     else: return "🌙 Khuya (23h - 05h)"
 
 def calculate_dew_point(temp, rh):
-    """Tính điểm đọng sương (Dew Point)"""
+    """Tính điểm đọng sương (Dew Point) bằng công thức Magnus-Tetens"""
     a = 17.27
     b = 237.7
     alpha = ((a * temp) / (b + temp)) + np.log(rh / 100.0)
     return round((b * alpha) / (a - alpha), 2)
 
 def predict_vpd_trend_dynamic(history_data, current_hour, plant_matrix):
-    """Dự báo xu hướng dựa trên dải VPD động của từng buổi cụ thể"""
+    """Dự báo xu hướng toán học dựa trên dải VPD động của từng buổi cụ thể"""
     if not history_data or len(history_data) < 3:
         return "📊 Hệ thống đang tích lũy thêm chu kỳ dữ liệu...", "normal"
     try:
@@ -28,7 +28,15 @@ def predict_vpd_trend_dynamic(history_data, current_hour, plant_matrix):
         current_block = get_biological_block(current_hour)
         vpd_min, vpd_max = plant_matrix[current_block]
         
-        slope = ((v1 - v2) + (v2 - v3)) / 2.0
+        diff_1 = v1 - v2
+        diff_2 = v2 - v3
+        
+        if abs(diff_1) < 0.005 and abs(diff_2) < 0.005:
+            if v1 < vpd_min: return "🟦 CẢNH BÁO: Hiện trạng quá ẩm đang bị kẹt đứng im lâu. Cần bật quạt đối lưu lập tức.", "danger_blue"
+            elif v1 > vpd_max: return "🟥 CẢNH BÁO: Hiện trạng khô nóng đang đứng im kéo dài. Cần kích hoạt hệ thống phun sương.", "danger_red"
+            else: return "🟩 Xu hướng: Chỉ số VPD đang duy trì đi ngang rất ổn định trong dải lý tưởng.", "normal"
+            
+        slope = (diff_1 + diff_2) / 2.0
         
         if v1 > vpd_max and slope > 0.02: 
             return f"🚨 [CẢNH BÁO SỚM] Buổi này cây cần max {vpd_max} kPa, hiện tại {v1:.2f} kPa và đang tăng khô gắt thêm!", "danger_red"
@@ -43,21 +51,26 @@ def predict_vpd_trend_dynamic(history_data, current_hour, plant_matrix):
 
 def calculate_dynamic_plant_stress(df_data, plant_matrix, mode_filter):
     """
-    THUẬT TOÁN ĐỈNH CAO: Tính toán giờ Stress dựa theo ngưỡng động thay đổi theo từng Buổi.
+    Thuật toán Agronomy chuyên sâu: Tính toán giờ Stress Khô / Ẩm tích lũy 
+    đối chiếu linh hoạt theo cấu hình ma trận của từng buổi cụ thể.
     """
     if df_data.empty or "VPD (kPa)" not in df_data.columns:
         return {"dry_hours": 0.0, "wet_hours": 0.0, "fungus_risk": 0}
     
-    # Xác định số phút đại diện cho 1 dòng dữ liệu
-    if "1 Ngày gần nhất" in mode_filter or "10 phút" in mode_filter: minutes_per_point = 10
-    elif "1 Tuần gần nhất" in mode_filter or "1 Tháng gần nhất" in mode_filter: minutes_per_point = 1440
-    else:
+    # Xác định số phút đại diện cho một điểm dữ liệu sau gộp
+    if "1 Ngày gần nhất" in mode_filter or "10 phút" in mode_filter: 
+        minutes_per_point = 10
+    elif "1 Tuần gần nhất" in mode_filter or "1 Tháng gần nhất" in mode_filter: 
+        minutes_per_point = 1440  # 1 ngày = 1440 phút
+    elif "Toàn bộ dữ liệu gốc" in mode_filter:
         if len(df_data) > 1 and "datetime_internal" in df_data.columns:
             try:
                 time_diffs = pd.Series(df_data["datetime_internal"]).diff().dropna()
                 minutes_per_point = time_diffs.dt.total_seconds().median() / 60.0
             except: minutes_per_point = 10
         else: minutes_per_point = 10
+    else:
+        minutes_per_point = 10
 
     dry_points = 0
     wet_points = 0
@@ -68,7 +81,6 @@ def calculate_dynamic_plant_stress(df_data, plant_matrix, mode_filter):
         vpd_val = row["VPD (kPa)"]
         temp_val = row["Nhiệt độ (°C)"]
         
-        # Lấy dải tối ưu của ĐÚNG BUỔI ĐÓ
         block_name = get_biological_block(dt.hour)
         b_min, b_max = plant_matrix[block_name]
         
@@ -76,7 +88,6 @@ def calculate_dynamic_plant_stress(df_data, plant_matrix, mode_filter):
             dry_points += 1
         elif vpd_val < b_min:
             wet_points += 1
-            # Nếu vừa quá ẩm vừa rơi vào dải nhiệt độ nấm phát triển (16°C - 25°C)
             if 16.0 <= temp_val <= 25.0:
                 fungus_points += 1
                 
@@ -92,7 +103,7 @@ def calculate_dynamic_plant_stress(df_data, plant_matrix, mode_filter):
     }
 
 def analyze_day_by_blocks_dynamic(history_list, plant_matrix, target_day_str):
-    """Phân tích báo cáo buổi đối chiếu trực tiếp với ma trận ngưỡng động"""
+    """Phân tích báo cáo chu kỳ buổi đối chiếu trực tiếp với ma trận ngưỡng động"""
     if not history_list: return pd.DataFrame()
     df = pd.DataFrame(history_list)
     df_filtered = df[df["Ngày"] == target_day_str].copy()
@@ -113,13 +124,13 @@ def analyze_day_by_blocks_dynamic(history_list, plant_matrix, target_day_str):
         
         if avg_v < b_min:
             status = f"⚠️ Quá ẩm (Mục tiêu: {b_min}-{b_max})"
-            sol = "Bật quạt đối lưu khí, mở bớt màng thông gió."
+            sol = "Bật quạt đối lưu khí mạnh, mở bớt màng thông gió rèm."
         elif avg_v > b_max:
             status = f"🚨 Quá khô (Mục tiêu: {b_min}-{b_max})"
-            sol = "Kéo lưới cắt nắng, kích hoạt hệ thống phun sương mịn."
+            sol = "Kéo lưới cắt nắng sương, kích hoạt hệ thống phun mịn hạt."
         else:
             status = f"✅ Lý tưởng ({b_min}-{b_max})"
-            sol = "Môi trường hoàn hảo cho buổi này. Duy trì hệ thống."
+            sol = "Môi trường hoàn hảo cho buổi này. Duy trì hệ thống thông gió."
             
         report_data.append({
             "Khoảng Buổi": idx, "Nhiệt độ TB": f"{avg_t} °C", "Độ ẩm TB": f"{avg_h} %",
