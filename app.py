@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 # Import các module nội bộ từ kho hệ thống
 from calculations import calculate_vpd, get_weather_by_time
 from services import send_telegram_message, get_quick_solution
-from analytics import analyze_day_by_blocks_rt, predict_vpd_trend_v3
+from analytics import analyze_day_by_blocks_rt, predict_vpd_trend_v3, calculate_plant_stress_hours
 from charts import draw_temperature_chart, draw_humidity_chart, draw_vpd_chart, draw_combined_chart
 
 TELE_TOKEN = "8917951413:AAE6LKUEfYEYiQrFWGoKsQn0tumZc_XbcHg"
@@ -44,19 +44,19 @@ if 'is_completed' not in st.session_state: st.session_state.is_completed = False
 if 'history' not in st.session_state: st.session_state.history = []
 if 'stt_counter' not in st.session_state: st.session_state.stt_counter = 0 
 if 'plant_idx' not in st.session_state: st.session_state.plant_idx = 0
-if 'vpd_range_val' not in st.session_state: st.session_state.vpd_range_val = (0.6, 1.0)
+if 'vpd_range_val' not in st.session_state: st.session_state.vpd_range_val = (0.6, 1.1)
 if 'simulated_time' not in st.session_state: st.session_state.simulated_time = "2026-05-24 07:00:00"
 
 if 'file_plant_idx' not in st.session_state: st.session_state.file_plant_idx = 0
-if 'file_vpd_range_val' not in st.session_state: st.session_state.file_vpd_range_val = (0.6, 1.0)
+if 'file_vpd_range_val' not in st.session_state: st.session_state.file_vpd_range_val = (0.6, 1.1)
 
-# DANH SÁCH CÂY TRỒNG ĐÀ LẠT MỞ RỘNG ĐẦY ĐỦ CÁC NGƯỠNG CHUẨN KHOA HỌC
+# CẤU HÌNH 9 LOẠI CÂY TRỒNG ĐÀ LẠT PHỔ BIẾN
 DANH_SACH_CAY = {
     "🍓 Dâu tây Đà Lạt (Hoa / Trái)": (0.6, 1.1),
     "🍓 Dâu tây Đà Lạt (Giai đoạn ngó/cây con)": (0.4, 0.8),
     "🌹 Hoa hồng nhà kính (Đà Lạt)": (0.8, 1.3),
     "🌼 Hoa cúc / Hoa đồng tiền": (0.7, 1.2),
-    "🍅 Cà chua bi / 🫑 Ớt chuông Sweet Palerma": (0.8, 1.4),
+    "🍅 Cà chua bi / 🫑 Ớt chuông Sweet Palermo": (0.8, 1.4),
     "🥦 Súp lơ xanh / Bắp cải baby (Rau ăn lá)": (0.5, 1.0),
     "🥬 Xà lách Thủy canh (Lô lô, Romaine)": (0.4, 0.9),
     "🌱 Cây giống trong vườn ươm (Cần ẩm cao)": (0.3, 0.7),
@@ -238,7 +238,7 @@ with tab_future:
 
 
 # --------------------------------------------------------
-# 📁 TAB 2: UPLOAD & BULK FILE ANALYTICS (TÍNH NĂNG CHỌN LOẠI CÂY MỚI)
+# 📁 TAB 2: UPLOAD & BULK FILE ANALYTICS (TÍCH HỢP TÍNH NĂNG CHỌN CÂY & GIỜ STRESS)
 # --------------------------------------------------------
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 19px;'>📁 TỰ ĐỘNG PHÂN TÍCH FILE IOT NHÀ KÍNH</h3>", unsafe_allow_html=True)
@@ -410,6 +410,23 @@ with tab_past:
             with m_col4:
                 st.markdown(f"<div class='metric-card-upload'><span style='font-size:12px;color:grey;'>📋 SỐ ĐIỂM DỮ LIỆU TRÊN BIỂU ĐỒ</span><br><b style='font-size:18px;color:#5D6D7E;'>{len(df_processed)} điểm</b></div>", unsafe_allow_html=True)
 
+            # --- TÍCH HỢP ĐÁNH GIÁ CHUYÊN SÂU: ÁP LỰC STRESS KHÍ KHỔNG CỦA CÂY ---
+            stress_result = calculate_plant_stress_hours(df_processed, file_vpd_min, file_vpd_max, time_filter_option)
+            st.markdown("<div style='margin-top:10px; font-weight:bold; color:#B71C1C;'>⚠️ ĐÁNH GIÁ CHUYÊN SÂU: ÁP LỰC STRESS KHÍ KHỔNG CỦA CÂY TRỒNG</div>", unsafe_allow_html=True)
+            s_col1, s_col2 = st.columns(2)
+            with s_col1:
+                d_hrs = stress_result["dry_hours"]
+                if d_hrs > 2.0:
+                    st.error(f"🚨 **Stress Khô Nóng:** Cây bị đóng khí khổng do quá khô gắt suốt **{d_hrs} giờ**. Nguy cơ cháy mép lá, thui hỏng hoa non!")
+                else:
+                    st.success(f"✅ **Áp lực khô:** An toàn (Chỉ có {d_hrs} giờ bị khô gắt, cây chịu đựng tốt).")
+            with s_col2:
+                w_hrs = stress_result["wet_hours"]
+                if w_hrs > 4.0:
+                    st.warning(f"🟦 **Stress Ẩm Ướt:** Môi trường tích tụ ẩm cao liên tục **{w_hrs} giờ**. Rất dễ bùng phát nấm phấn trắng, sương mai tại Đà Lạt!")
+                else:
+                    st.success(f"✅ **Áp lực ẩm:** An toàn (Chỉ có {w_hrs} giờ đọng ẩm, lá cây nhanh khô ráo).")
+
             st.write("") 
             
             res_left, res_right = st.columns([6.2, 3.8])
@@ -468,15 +485,15 @@ with tab_past:
                     if avg_v < file_vpd_min:
                         conclusion = "⚠️ CHƯA ĐẠT (Quá ẩm)"
                         reason = f"Độ ẩm không khí tích tụ cao ({avg_h}%), nhiệt độ mát ẩm làm khép khí khổng."
-                        solution = "Bật quạt đối lưu, tăng nhẹ nhiệt độ sưởi hoặc ngưng tưới phun sương."
+                        solution = "Bật quạt đối lưu khí, tăng nhẹ sưởi ấm hoặc ngừng hệ thống tưới sương."
                     elif avg_v > file_vpd_max:
                         conclusion = "🚨 CHƯA ĐẠT (Quá khô)"
                         reason = f"Nhiệt độ cao ({avg_t}°C) kết hợp độ ẩm tụt sâu ({avg_h}%), bốc thoát hơi quá nhanh."
-                        solution = "Kéo lưới cắt nắng, kích hoạt phun sương hạt mịn hoặc hệ thống nhỏ giọt."
+                        solution = "Kéo lưới cắt nắng sương, kích hoạt phun sương hạt mịn hoặc hệ thống tưới nhỏ giọt."
                     else:
                         conclusion = "✅ LÝ TƯỞNG"
-                        reason = "Sự cân bằng hoàn hảo giữa nhiệt độ và ẩm độ, cây mở khí khổng trao đổi chất tốt nhất."
-                        solution = "Giữ vững chế độ vận hành hiện tại, duy trì cảm biến ổn định."
+                        reason = "Sự cân bằng tuyệt vời giữa nhiệt độ và ẩm độ, cây mở tối đa khí khổng để hấp thụ CO2 tốt nhất."
+                        solution = "Giữ vững cấu hình vận hành hiện tại, kiểm tra định kỳ sensor ổn định."
                         
                     block_report_rows.append({
                         "Khoảng Buổi": idx, "Nhiệt độ TB": f"{avg_t} °C", "Độ ẩm TB": f"{avg_h} %",
