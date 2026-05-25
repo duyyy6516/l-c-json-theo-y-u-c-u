@@ -3,7 +3,7 @@ import pandas as pd
 import json
 from datetime import datetime, timedelta
 
-# Import các module nội bộ từ kho Git của bạn
+# Import các module nội bộ từ kho hệ thống
 from calculations import calculate_vpd, get_weather_by_time
 from services import send_telegram_message, get_quick_solution
 from analytics import analyze_day_by_blocks_rt, predict_vpd_trend_v3
@@ -30,7 +30,7 @@ st.markdown("""
     .danger-box-blue { padding: 12px; background-color: #E3F2FD; border-left: 6px solid #2979FF; color: #0D47A1; font-weight: bold; font-size: 15px; border-radius: 4px; margin-bottom: 8px; }
     
     /* CSS cho phần tải file */
-    .upload-header { font-size: 16px; font-weight: bold; color: #1B4F72; border-bottom: 2px solid #D4E6F1; padding-bottom: 5px; margin-bottom: 12px; }
+    .upload-header { font-size: 16px; font-weight: bold; color: #1A5276; border-bottom: 2px solid #D4E6F1; padding-bottom: 5px; margin-bottom: 12px; }
     .metric-card-upload { background-color: #F4F6F7; border: 1px solid #E5E7E9; padding: 10px; border-radius: 6px; text-align: center; }
     </style>
     """, unsafe_allow_html=True)
@@ -49,6 +49,18 @@ if 'simulated_time' not in st.session_state: st.session_state.simulated_time = "
 
 if 'file_plant_idx' not in st.session_state: st.session_state.file_plant_idx = 0
 if 'file_vpd_range_val' not in st.session_state: st.session_state.file_vpd_range_val = (0.6, 1.0)
+
+# Hàm định dạng màu nền thông minh cho bảng dữ liệu nhật ký
+def style_status_rows(row):
+    styles = [''] * len(row)
+    status = str(row['Trạng thái'])
+    if "Lý tưởng" in status:
+        styles[row.index.get_loc('Trạng thái')] = 'background-color: #E8F5E9; color: #1B5E20; font-weight: bold; border-radius: 4px;'
+    elif "Quá khô" in status:
+        styles[row.index.get_loc('Trạng thái')] = 'background-color: #FFEBEE; color: #B71C1C; font-weight: bold; border-radius: 4px;'
+    elif "Quá ẩm" in status:
+        styles[row.index.get_loc('Trạng thái')] = 'background-color: #E3F2FD; color: #0D47A1; font-weight: bold; border-radius: 4px;'
+    return styles
 
 def setup_next_day():
     current_dt = datetime.strptime(st.session_state.simulated_time, "%Y-%m-%d %H:%M:%S")
@@ -103,7 +115,7 @@ def trigger_new_data(vpd_min, vpd_max):
 tab_future, tab_past = st.tabs(["🔮 XEM DỰ BÁO & THEO DÕI TƯƠNG LAI", "📁 TẢI FILE & PHÂN TÍCH LỊCH SỬ"])
 
 # --------------------------------------------------------
-# TAB 1: REALTIME MONITORING (Chạy chu kỳ ngày ổn định)
+# TAB 1: REALTIME MONITORING
 # --------------------------------------------------------
 with tab_future:
     left_col, right_col = st.columns([3.5, 6.5])
@@ -209,11 +221,12 @@ with tab_future:
             with main_tab3:
                 df_display = df_filtered.copy()
                 df_display["Thời gian"] = df_display["Hiển thị Giờ"]
-                st.dataframe(df_display[["STT", "Thời gian", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]], use_container_width=True, hide_index=True)
+                styled_df_rt = df_display[["STT", "Thời gian", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]].style.apply(style_status_rows, axis=1)
+                st.dataframe(styled_df_rt, use_container_width=True, hide_index=True)
 
 
 # --------------------------------------------------------
-# 📁 TAB 2: UPLOAD & BULK FILE ANALYTICS (ĐÃ SỬA TRIỆT ĐỂ LỖI NHIỀU ĐIỂM)
+# 📁 TAB 2: UPLOAD & BULK FILE ANALYTICS (TỰ ĐỘNG CHUẨN HÓA KHI TRÊN 2 NGÀY)
 # --------------------------------------------------------
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 19px;'>📁 TỰ ĐỘNG PHÂN TÍCH FILE IOT NHÀ KÍNH</h3>", unsafe_allow_html=True)
@@ -291,10 +304,12 @@ with tab_past:
             df_raw_calc = df_raw_calc[df_raw_calc["Độ ẩm (%)"] > 1.0].dropna(subset=["Nhiệt độ (°C)", "Độ ẩm (%)"]).sort_values("datetime_internal")
 
             if len(df_raw_calc) > 0:
+                # Bước tính toán sẵn chỉ số VPD gốc cho từng bản ghi nhỏ trước khi xử lý gộp nhóm
+                df_raw_calc["VPD_raw"] = df_raw_calc.apply(lambda row: calculate_vpd(row["Nhiệt độ (°C)"], row["Độ ẩm (%)"]), axis=1)
+                
                 df_raw_calc["only_date"] = df_raw_calc["datetime_internal"].dt.date
                 available_dates = sorted(df_raw_calc["only_date"].unique())
                 
-                # Áp dụng bộ lọc khoảng cách thời gian trước khi Resample
                 if "Tự chọn một ngày cụ thể" in time_filter_option:
                     selected_date = st.date_input("👇 Chọn ngày trích xuất dữ liệu trên lịch:", value=available_dates[-1] if available_dates else datetime.now().date())
                     df_raw_calc = df_raw_calc[df_raw_calc["only_date"] == selected_date]
@@ -309,43 +324,48 @@ with tab_past:
 
             df_for_block_analysis = df_raw_calc.copy()
 
-            # --- FIX CHÍNH XÁC: GOM TRUNG BÌNH THEO ĐÚNG CHẾ ĐỘ XEM ĐỂ GIẢM ĐIỂM BIỂU ĐỒ ---
             if len(df_raw_calc) > 0:
-                df_resample_input = df_raw_calc[["datetime_internal", "Nhiệt độ (°C)", "Độ ẩm (%)"]].copy()
+                # Lưu số lượng ngày thực tế sau bộ lọc
+                unique_days_filtered = df_raw_calc["only_date"].nunique()
+                
+                df_resample_input = df_raw_calc[["datetime_internal", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD_raw"]].copy()
                 df_resample_input.set_index("datetime_internal", inplace=True)
                 
                 if any(k in time_filter_option for k in ["1 Tuần gần nhất", "1 Tháng gần nhất"]):
-                    # Nếu xem chu kỳ dài (> 1 ngày), thực hiện gom dữ liệu trung bình theo Ngày (1d) để giảm điểm
                     df_resampled = df_resample_input.resample("1D").mean().dropna()
                 elif "1 Ngày gần nhất" in time_filter_option:
-                    # Nếu xem 1 ngày gần nhất, gom theo 10 phút cho mượt
                     df_resampled = df_resample_input.resample("10min").mean().dropna()
                 else:
-                    # Xem toàn bộ dữ liệu gốc
                     df_resampled = df_resample_input.copy()
                 
                 df_resampled["datetime_internal"] = df_resampled.index
-                # Nếu là dữ liệu gộp theo ngày, định dạng nhãn trục X thành Ngày. Ngược lại định dạng Giờ.
                 if any(k in time_filter_option for k in ["1 Tuần gần nhất", "1 Tháng gần nhất"]):
                     df_resampled["Hiển thị Giờ"] = df_resampled["datetime_internal"].dt.strftime("%d/%m")
                 else:
                     df_resampled["Hiển thị Giờ"] = df_resampled["datetime_internal"].dt.strftime("%H:%M")
                 df_resampled.reset_index(drop=True, inplace=True)
             else:
-                df_resampled = pd.DataFrame(columns=["datetime_internal", "Nhiệt độ (°C)", "Độ ẩm (%)", "Hiển thị Giờ"])
+                unique_days_filtered = 0
+                df_resampled = pd.DataFrame(columns=["datetime_internal", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD_raw", "Hiển thị Giờ"])
 
-            # Gán nguồn dữ liệu đã qua xử lý Gộp Trung Bình vào df_processed
             df_processed = pd.DataFrame()
             df_processed["datetime_internal"] = df_resampled["datetime_internal"]
             df_processed["Nhiệt độ (°C)"] = df_resampled["Nhiệt độ (°C)"].round(2)
             df_processed["Độ ẩm (%)"] = df_resampled["Độ ẩm (%)"].round(2)
             df_processed["Hiển thị Giờ"] = df_resampled["Hiển thị Giờ"]
             
-            df_processed["VPD (kPa)"] = df_processed.apply(lambda row: round(calculate_vpd(row["Nhiệt độ (°C)"], row["Độ ẩm (%)"]), 2), axis=1)
+            # ĐIỀU KIỆN LOGIC KHẮC PHỤC LỖI ĐỘT BIẾN VPD:
+            # Nếu tập dữ liệu lọc ra lớn hơn 2 ngày (> 2): Lấy trực tiếp cột VPD trung bình làm mịn (VPD_raw).
+            # Ngược lại nếu nhỏ hơn hoặc bằng 2 ngày: Tính trực tiếp cơ học cơ bản từ cặp giá trị.
+            if unique_days_filtered > 2:
+                df_processed["VPD (kPa)"] = df_resampled["VPD_raw"].round(2)
+            else:
+                df_processed["VPD (kPa)"] = df_processed.apply(lambda row: round(calculate_vpd(row["Nhiệt độ (°C)"], row["Độ ẩm (%)"]), 2), axis=1)
+                
             df_processed["Ngày"] = "Dữ liệu File"
             df_processed["Trạng thái"] = df_processed["VPD (kPa)"].apply(lambda x: "⚠️ Quá ẩm" if x < file_vpd_min else ("✅ Lý tưởng" if x <= file_vpd_max else "🚨 Quá khô"))
             
-            # --- THỂ HIỆN KPIs THỐNG KÊ TỔNG QUAN ---
+            # --- KPIs THỐNG KÊ TỔNG QUAN ---
             st.markdown("<div style='margin-top:15px; margin-bottom:5px; font-weight:bold; color:#1A5276;'>📊 TỔNG QUAN CHU KỲ SAU KHI GỘP SỐ LIỆU TỐI ƯU</div>", unsafe_allow_html=True)
             m_col1, m_col2, m_col3, m_col4 = st.columns(4)
             with m_col1:
@@ -372,16 +392,8 @@ with tab_past:
                 st.markdown("<div style='font-weight:bold; color:#1A5276; margin-bottom:5px;'>📋 BẢNG NHẬT KÝ THEO DÕI ĐIỂM GỘP CHU KỲ</div>", unsafe_allow_html=True)
                 preview_cols = ["Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]
                 
-                st.dataframe(
-                    df_processed[preview_cols], 
-                    use_container_width=True, 
-                    hide_index=True,
-                    height=290,
-                    column_config={
-                        "Hiển thị Giờ": st.column_config.TextColumn(label="Mốc Chu Kỳ"),
-                        "VPD (kPa)": st.column_config.NumberColumn(format="%.2f kPa"),
-                    }
-                )
+                styled_df_file = df_processed[preview_cols].style.apply(style_status_rows, axis=1)
+                st.dataframe(styled_df_file, use_container_width=True, hide_index=True, height=290)
                 
                 st.download_button(
                     label="📥 Xuất báo cáo tính toán chu kỳ (.csv)",
@@ -406,7 +418,6 @@ with tab_past:
                     else: return "🌙 Khuya (23h - 05h)"
                 
                 df_for_block_analysis["Buổi"] = df_for_block_analysis["Hour"].apply(assign_block)
-                df_for_block_analysis["VPD_raw"] = df_for_block_analysis.apply(lambda r: calculate_vpd(r["Nhiệt độ (°C)"], r["Độ ẩm (%)"]), axis=1)
                 
                 block_summary = df_for_block_analysis.groupby("Buổi").agg({
                     "Nhiệt độ (°C)": "mean", "Độ ẩm (%)": "mean", "VPD_raw": "mean"
@@ -438,7 +449,15 @@ with tab_past:
                     })
                 
                 df_block_report = pd.DataFrame(block_report_rows)
-                st.dataframe(df_block_report, use_container_width=True, hide_index=True)
+                
+                styled_df_block = df_block_report.style.apply(lambda r: [
+                    'background-color: #E8F5E9; color: #1B5E20; font-weight: bold;' if "LÝ TƯỞNG" in str(r["Đánh giá"]) 
+                    else ('background-color: #FFEBEE; color: #B71C1C; font-weight: bold;' if "Quá khô" in str(r["Đánh giá"]) 
+                    else 'background-color: #E3F2FD; color: #0D47A1; font-weight: bold;')
+                    for _ in range(len(r))
+                ], axis=1)
+                
+                st.dataframe(styled_df_block, use_container_width=True, hide_index=True)
                 
                 st.write("")
                 if st.button("📤 Gửi báo cáo phân tích file qua Telegram", type="primary", key="btn_send_file_tele"):
