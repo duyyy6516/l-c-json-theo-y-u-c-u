@@ -206,10 +206,19 @@ with tab_future:
             b_hien_tai = get_biological_block(sim_dt.hour)
             v_min, v_max = st.session_state.current_matrix[b_hien_tai]
             
-            m_tab1, m_tab2 = st.tabs(["📈 Đồ thị biến động", "📋 Bảng nhật ký chi tiết"])
+            m_tab1, m_tab2 = st.tabs(["📈 Đồ thị biến động liền mạch", "📋 Bảng nhật ký chi tiết"])
             with m_tab1:
-                # Trả lại use_container_width=True để biểu đồ trải full khung rộng đẹp mắt
                 st.altair_chart(draw_vpd_chart(df_f, v_min, v_max), use_container_width=True)
+                
+                # --- ĐOẠN CODE MỚI THÊM BẢNG CHIA BUỔI ĐÁNH GIÁ CHUNG REALTIME ---
+                st.markdown("##### 📝 BẢNG ĐÁNH GIÁ CHUNG THEO CÁC BUỔI TRONG NGÀY (REALTIME)")
+                df_rt_report = analyze_day_by_blocks_rt(st.session_state.history, st.session_state.current_matrix, sel_day)
+                if not df_rt_report.empty:
+                    st.dataframe(df_rt_report, use_container_width=True, hide_index=True)
+                else:
+                    st.info("Chưa có đủ điểm dữ liệu để tổng hợp báo cáo các buổi.")
+                # ----------------------------------------------------------------
+                
             with m_tab2:
                 st.dataframe(df_f[["STT", "Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]].style.apply(style_status_rows, axis=1), use_container_width=True, hide_index=True)
 
