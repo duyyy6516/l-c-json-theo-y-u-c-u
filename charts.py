@@ -4,13 +4,13 @@ import pandas as pd
 def draw_vpd_chart(df, v_min, v_max):
     """
     Vẽ biểu đồ diễn biến chỉ số VPD theo thời gian trong ngày.
-    Đã được cấu hình tăng biên trên (Top Padding) để khắc phục lỗi mất chữ chú thích.
+    Đã được cấu hình tăng biên trên (Top Padding) theo Cách 1 để sửa lỗi bị mất chữ chú thích.
     """
     if df.empty:
-        # Trả về một biểu đồ trống nếu chưa có dữ liệu để tránh crash giao diện
+        # Trả về một biểu đồ trống nếu chưa có dữ liệu để tránh lỗi giao diện
         return alt.Chart(pd.DataFrame()).mark_blank()
 
-    # 1. Tạo các vùng màu nền đại diện cho các trạng thái của môi trường (Solid background)
+    # 1. Định nghĩa các vùng màu nền đại diện cho các trạng thái của môi trường (Solid background)
     # Vùng Quá Ẩm (0.0 -> v_min - 0.2)
     zone_too_wet = alt.Chart(df).mark_rect(opacity=0.9, color='#0B5345').encode(
         y=alt.value(350),
@@ -38,7 +38,7 @@ def draw_vpd_chart(df, v_min, v_max):
     # Vùng Quá Nóng (v_max + 0.5 trở lên)
     zone_too_hot = alt.Chart(df).mark_rect(opacity=0.9, color='#C0392B').encode(
         y=alt.Y('zone_toohot_low:Q').datum(v_max + 0.5),
-        y2=alt.Y('zone_toohot_high:Q').datum(3.0) # Ngưỡng trần tối đa hiển thị
+        y2=alt.Y('zone_toohot_high:Q').datum(3.0) # Ngưỡng trần tối đa hiển thị vùng đỏ
     )
 
     # 2. Tạo đường vẽ dữ liệu VPD thực tế (Đường Line màu trắng có node tròn)
@@ -48,7 +48,7 @@ def draw_vpd_chart(df, v_min, v_max):
                 axis=alt.Axis(labelAngle=-90, labelColor='#2C3E50', titleColor='#2C3E50'))
     )
 
-    # Đường nối line màu trắng dày
+    # Đường nối line màu trắng dày nổi bật trên nền solid
     vpd_line = base_data.mark_line(
         color='#FFFFFF', 
         strokeWidth=3.5, 
@@ -60,7 +60,7 @@ def draw_vpd_chart(df, v_min, v_max):
                 axis=alt.Axis(grid=True, gridDash=[3,3], gridColor='#BDC3C7'))
     )
 
-    # Các điểm node tròn viền đen lõi trắng trên đường line để dễ tương tác rà chuột (Tooltip)
+    # Các điểm node tròn viền đen lõi trắng trên đường line để di chuột xem Tooltip thông tin
     vpd_points = base_data.mark_point(
         color='#17202A', 
         fill='#FFFFFF', 
@@ -77,27 +77,28 @@ def draw_vpd_chart(df, v_min, v_max):
         ]
     )
 
-    # 3. Gộp toàn bộ các lớp (Layers) đồ thị và cấu hình không gian view bảo vệ chữ
+    # 3. Gộp toàn bộ các lớp (Layers) đồ thị và cấu hình không gian view bảo vệ chữ chú thích
     combined_chart = alt.layer(
         zone_too_wet, zone_wet, zone_ideal, zone_hot, zone_too_hot,
         vpd_line, vpd_points
     ).properties(
         width='container',
         height=350,
-        # Đưa dòng chú thích làm Tiêu đề chính thức của Altair và đẩy cao khoảng cách lên
+        # Đưa dòng chú thích làm Tiêu đề chính thức của cấu trúc Altair
         title=alt.TitleParams(
             text=f"Cạn dưới: {v_min} kPa | Cạn trên: {v_max} kPa | Khoá dải màu Solid đậm | vạch dựng phân buổi",
             fontSize=13,
             fontWeight='bold',
             color='#5D6D7E',
-            offset=22,         # Tạo khoảng trống thông thoáng 22px giữa chữ và đỉnh đồ thị
+            offset=22,         # Tạo khoảng trống thông thoáng 22px giữa chữ tiêu đề và đỉnh đồ thị màu
             orient='top',
-            anchor='start'     # Căn lề trái bằng với trục Y
+            anchor='start'     # Căn lề trái thẳng hàng với trục Y
         )
     ).configure_view(
-        # ĐÂY LÀ KHỐI LỆNH QUAN TRỌNG NHẤT CỦA CÁCH 1:
-        # Hạ thấp toàn bộ khung đồ thị xuống dưới 45px để chừa chỗ trống cho dòng chú thích bên trên, 
-        # ngăn ngừa thanh công cụ lưu ảnh của Streamlit đè mất chữ.
+        # ĐÂY LÀ KHỐI LỆNH SỬA LỖI THEO CÁCH 1:
+        # Ép buộc toàn bộ vùng đồ thị màu dịch xuống dưới một khoảng padding là 45px.
+        # Khoảng trống này giúp dòng chữ chú thích hiển thị độc lập, hoàn toàn không bị 
+        # nút ba chấm công cụ tải ảnh mặc định của Streamlit đè mất chữ.
         padding={'top': 45, 'bottom': 10, 'left': 15, 'right': 15}
     ).configure_axis(
         domain=False
@@ -108,17 +109,17 @@ def draw_vpd_chart(df, v_min, v_max):
 
 def draw_combined_temp_humidity_chart(df):
     """
-    Vẽ biểu đồ lồng nhau theo dõi cặp thông số Nhiệt độ (Line) và Độ ẩm (Bar) song song.
+    Vẽ biểu đồ lồng nhau theo dõi cặp thông số Nhiệt độ (Line) và Độ ẩm (Bar) song song trên cùng hệ trục.
     """
     if df.empty:
         return alt.Chart(pd.DataFrame()).mark_blank()
 
-    # Trục chính cơ sở dựa trên chuỗi thời gian
+    # Trục chính cơ sở dựa trên chuỗi thời gian hiển thị giờ
     base = alt.Chart(df).encode(
         x=alt.X('Hiển thị Giờ:O', title='Mốc chu kỳ thời gian', axis=alt.Axis(labelAngle=-90))
     )
 
-    # Đồ thị cột (Bar) biểu diễn Độ ẩm tương đối (%) - Trục bên phải Y2
+    # Đồ thị cột (Bar) biểu diễn Độ ẩm tương đối (%) - Liên kết trục bên phải Y2
     humidity_bar = base.mark_bar(
         color='#3498DB', 
         opacity=0.35, 
@@ -130,7 +131,7 @@ def draw_combined_temp_humidity_chart(df):
                 axis=alt.Axis(titleColor='#3498DB', orient='right'))
     )
 
-    # Đồ thị đường (Line) biểu diễn Nhiệt độ khí hậu (°C) - Trục bên trái Y
+    # Đồ thị đường (Line) biểu diễn Nhiệt độ khí hậu (°C) - Liên kết trục bên trái Y
     temp_line = base.mark_line(
         color='#E74C3C', 
         strokeWidth=3,
@@ -142,7 +143,7 @@ def draw_combined_temp_humidity_chart(df):
                 axis=alt.Axis(titleColor='#E74C3C', orient='left'))
     )
 
-    # Điểm tròn nhỏ định vị trên đường nhiệt độ giúp soi tooltip
+    # Điểm tròn nhỏ định vị trên đường nhiệt độ giúp soi dữ liệu mượt mà hơn
     temp_points = base.mark_point(
         color='#E74C3C', 
         fill='#FFFFFF', 
@@ -156,12 +157,12 @@ def draw_combined_temp_humidity_chart(df):
         ]
     )
 
-    # Kết hợp trục kép (Dual Axis Chart)
+    # Kết hợp trục kép (Dual Axis Chart) bằng cách lồng ghép các layer độc lập dải đo
     dual_axis_chart = alt.layer(
         humidity_bar, 
         alt.layer(temp_line, temp_points)
     ).resolve_scale(
-        y='independent'  # Xác định hai trục độc lập nhau
+        y='independent'  # Xác định hai trục Y trái và phải độc lập quy mô số liệu
     ).properties(
         width='container',
         height=220,
