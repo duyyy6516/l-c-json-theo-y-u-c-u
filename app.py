@@ -19,7 +19,6 @@ TELE_CHAT_ID = "7290661009"
 
 st.set_page_config(page_title="VPD Smart Farm Monitor Pro", page_icon="🌿", layout="wide")
 
-# Thiết lập mã màu CSS dạng Solid Đậm, chữ màu trắng hoặc màu tương tương phản siêu mạnh để dễ đọc
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"] { overflow-y: auto !important; scroll-behavior: smooth; }
@@ -44,16 +43,16 @@ if 'simulated_time' not in st.session_state: st.session_state.simulated_time = "
 
 PLANT_PRESETS = {
     "🍓 Dâu tây Đà Lạt (Giai đoạn trái)": {
-        "🌅 Sáng (05h - 10h)": (0.5, 0.9), "☀️ Trưa (10h - 15h)": (0.7, 1.2), 
-        "🌇 Chiều (15h - 19h)": (0.6, 1.0), "🌌 Tối (19h - 23h)": (0.4, 0.8), "🌙 Khuya (23h - 05h)": (0.3, 0.7)
+        "🌅 Sáng (05h-10h)": (0.5, 0.9), "☀️ Trưa (10h-15h)": (0.7, 1.2), 
+        "🌇 Chiều (15h-19h)": (0.6, 1.0), "🌌 Tối (19h-23h)": (0.4, 0.8), "🌙 Khuya (23h-05h)": (0.3, 0.7)
     },
     "🌹 Hoa hồng nhà kính": {
-        "🌅 Sáng (05h - 10h)": (0.6, 1.1), "☀️ Trưa (10h - 15h)": (0.8, 1.4), 
-        "🌇 Chiều (15h - 19h)": (0.7, 1.2), "🌌 Tối (19h - 23h)": (0.5, 0.9), "🌙 Khuya (23h - 05h)": (0.4, 0.8)
+        "🌅 Sáng (05h-10h)": (0.6, 1.1), "☀️ Trưa (10h-15h)": (0.8, 1.4), 
+        "🌇 Chiều (15h-19h)": (0.7, 1.2), "🌌 Tối (19h-23h)": (0.5, 0.9), "🌙 Khuya (23h-05h)": (0.4, 0.8)
     },
     "🍅 Cà chua bi / Ớt chuông": {
-        "🌅 Sáng (05h - 10h)": (0.6, 1.0), "☀️ Trưa (10h - 15h)": (0.8, 1.3), 
-        "🌇 Chiều (15h - 19h)": (0.7, 1.1), "🌌 Tối (19h - 23h)": (0.5, 0.9), "🌙 Khuya (23h - 05h)": (0.4, 0.8)
+        "🌅 Sáng (05h-10h)": (0.6, 1.0), "☀️ Trưa (10h-15h)": (0.8, 1.3), 
+        "🌇 Chiều (15h-19h)": (0.7, 1.1), "🌌 Tối (19h-23h)": (0.5, 0.9), "🌙 Khuya (23h-05h)": (0.4, 0.8)
     }
 }
 
@@ -64,7 +63,6 @@ def style_status_rows(row):
     styles = [''] * len(row)
     status = str(row['Trạng thái'])
     loc = row.index.get_loc('Trạng thái')
-    # Style tô màu khối đặc cho từng dòng bảng dữ liệu lịch sử
     if "Lý Tưởng" in status: styles[loc] = 'background-color: #27AE60; color: #FFFFFF; font-weight: bold;'
     elif "Quá Nóng" in status: styles[loc] = 'background-color: #C0392B; color: #FFFFFF; font-weight: bold;'
     elif "Nóng" in status: styles[loc] = 'background-color: #F39C12; color: #FFFFFF; font-weight: bold;'
@@ -118,7 +116,8 @@ if st.session_state.stt_counter == 0:
 tab_future, tab_past = st.tabs(["🔮 MÔ PHỎNG & XEM REALTIME", "📁 QUÉT FILE IOT HỆ THỐNG"])
 
 with tab_future:
-    left_col, right_col = st.columns([4, 6])
+    # Cấu hình [3, 7] để bên phải có không gian trải biểu đồ hàng ngang rộng rãi
+    left_col, right_col = st.columns([3, 7])
     with left_col:
         st.markdown("<h3 style='color: #1E8449; font-size: 17px;'>📋 CẤU HÌNH MA TRẬN VPD THEO BUỔI</h3>", unsafe_allow_html=True)
         preset_choice = st.selectbox("Chọn giống cây áp ma trận mẫu:", list(PLANT_PRESETS.keys()) + ["🛠️ Tùy chỉnh thủ công từng buổi"])
@@ -130,15 +129,15 @@ with tab_future:
             is_dis = False
 
         with st.container(border=True):
-            m_sáng = st.slider("🌅 Sáng (05h - 10h):", 0.0, 3.0, st.session_state.current_matrix["🌅 Sáng (05h - 10h)"], 0.1, disabled=is_dis)
-            m_trưa = st.slider("☀️ Trưa (10h - 15h):", 0.0, 3.0, st.session_state.current_matrix["☀️ Trưa (10h - 15h)"], 0.1, disabled=is_dis)
-            m_chiều = st.slider("🌇 Chiều (15h - 19h):", 0.0, 3.0, st.session_state.current_matrix["🌇 Chiều (15h - 19h)"], 0.1, disabled=is_dis)
-            m_tối = st.slider("🌌 Tối (19h - 23h):", 0.0, 3.0, st.session_state.current_matrix["🌌 Tối (19h - 23h)"], 0.1, disabled=is_dis)
-            m_khuya = st.slider("🌙 Khuya (23h - 05h):", 0.0, 3.0, st.session_state.current_matrix["🌙 Khuya (23h - 05h)"], 0.1, disabled=is_dis)
+            m_sáng = st.slider("🌅 Sáng (05h-10h):", 0.0, 3.0, st.session_state.current_matrix["🌅 Sáng (05h-10h)"], 0.1, disabled=is_dis)
+            m_trưa = st.slider("☀️ Trưa (10h-15h):", 0.0, 3.0, st.session_state.current_matrix["☀️ Trưa (10h-15h)"], 0.1, disabled=is_dis)
+            m_chiều = st.slider("🌇 Chiều (15h-19h):", 0.0, 3.0, st.session_state.current_matrix["🌇 Chiều (15h-19h)"], 0.1, disabled=is_dis)
+            m_tối = st.slider("🌌 Tối (19h-23h):", 0.0, 3.0, st.session_state.current_matrix["🌌 Tối (19h-23h)"], 0.1, disabled=is_dis)
+            m_khuya = st.slider("🌙 Khuya (23h-05h):", 0.0, 3.0, st.session_state.current_matrix["🌙 Khuya (23h-05h)"], 0.1, disabled=is_dis)
             
             st.session_state.current_matrix = {
-                "🌅 Sáng (05h - 10h)": m_sáng, "☀️ Trưa (10h - 15h)": m_trưa,
-                "🌇 Chiều (15h - 19h)": m_chiều, "🌌 Tối (19h - 23h)": m_tối, "🌙 Khuya (23h - 05h)": m_khuya
+                "🌅 Sáng (05h-10h)": m_sáng, "☀️ Trưa (10h-15h)": m_trưa,
+                "🌇 Chiều (15h-19h)": m_chiều, "🌌 Tối (19h-23h)": m_tối, "🌙 Khuya (23h-05h)": m_khuya
             }
 
         with st.container(border=True):
@@ -210,13 +209,14 @@ with tab_future:
             
             m_tab1, m_tab2 = st.tabs(["📈 Đồ thị biến động", "📋 Bảng nhật ký chi tiết"])
             with m_tab1:
-                st.altair_chart(draw_vpd_chart(df_f, v_min, v_max), use_container_width=True)
+                # use_container_width gán thành False để biểu đồ giữ tỷ lệ phân khối chuẩn
+                st.altair_chart(draw_vpd_chart(df_f, v_min, v_max), use_container_width=False)
             with m_tab2:
                 st.dataframe(df_f[["STT", "Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]].style.apply(style_status_rows, axis=1), use_container_width=True, hide_index=True)
 
 with tab_past:
     st.markdown("<h3 style='color: #114B72; font-size: 18px;'>📁 TẢI FILE NHẬT KÝ IOT TRẠM CẢM BIẾN</h3>", unsafe_allow_html=True)
-    f_left, f_right = st.columns([4, 6])
+    f_left, f_right = st.columns([3, 7])
     
     with f_left:
         with st.container(border=True):
@@ -232,15 +232,15 @@ with tab_past:
                 file_matrix = st.session_state.file_matrix
                 f_is_dis = False
                 
-            f_sáng = st.slider("🌅 Sáng (05h - 10h):", 0.0, 3.0, file_matrix["🌅 Sáng (05h - 10h)"], 0.1, key="fs_1", disabled=f_is_dis)
-            f_trưa = st.slider("☀️ Trưa (10h - 15h):", 0.0, 3.0, file_matrix["☀️ Trưa (10h - 15h)"], 0.1, key="fs_2", disabled=f_is_dis)
-            f_chiều = st.slider("🌇 Chiều (15h - 19h):", 0.0, 3.0, file_matrix["🌇 Chiều (15h - 19h)"], 0.1, key="fs_3", disabled=f_is_dis)
-            f_tối = st.slider("🌌 Tối (19h - 23h):", 0.0, 3.0, file_matrix["🌌 Tối (19h - 23h)"], 0.1, key="fs_4", disabled=f_is_dis)
-            f_khuya = st.slider("🌙 Khuya (23h - 05h):", 0.0, 3.0, file_matrix["🌙 Khuya (23h - 05h)"], 0.1, key="fs_5", disabled=f_is_dis)
+            f_sáng = st.slider("🌅 Sáng (05h-10h):", 0.0, 3.0, file_matrix["🌅 Sáng (05h-10h)"], 0.1, key="fs_1", disabled=f_is_dis)
+            f_trưa = st.slider("☀️ Trưa (10h-15h):", 0.0, 3.0, file_matrix["☀️ Trưa (10h-15h)"], 0.1, key="fs_2", disabled=f_is_dis)
+            f_chiều = st.slider("🌇 Chiều (15h-19h):", 0.0, 3.0, file_matrix["🌇 Chiều (15h-19h)"], 0.1, key="fs_3", disabled=f_is_dis)
+            f_tối = st.slider("🌌 Tối (19h-23h):", 0.0, 3.0, file_matrix["🌌 Tối (19h-23h)"], 0.1, key="fs_4", disabled=f_is_dis)
+            f_khuya = st.slider("🌙 Khuya (23h-05h):", 0.0, 3.0, file_matrix["🌙 Khuya (23h-05h)"], 0.1, key="fs_5", disabled=f_is_dis)
             
             file_matrix = {
-                "🌅 Sáng (05h - 10h)": f_sáng, "☀️ Trưa (10h - 15h)": f_trưa,
-                "🌇 Chiều (15h - 19h)": f_chiều, "🌌 Tối (19h - 23h)": f_tối, "🌙 Khuya (23h - 05h)": f_khuya
+                "🌅 Sáng (05h-10h)": f_sáng, "☀️ Trưa (10h-15h)": f_trưa,
+                "🌇 Chiều (15h-19h)": f_chiều, "🌌 Tối (19h-23h)": f_tối, "🌙 Khuya (23h-05h)": f_khuya
             }
             
     with f_right:
@@ -385,8 +385,8 @@ with tab_past:
                 st.markdown("<div style='font-weight:bold; color:#114B72; margin-bottom:5px;'>📈 CÁC BIỂU ĐỒ ĐỐI CHIẾU TRỰC QUAN</div>", unsafe_allow_html=True)
                 f_tab1, f_tab2, f_tab3 = st.tabs(["🎯 Chỉ số VPD", "🌡️ Nhiệt độ khí", "💧 Độ ẩm khí"])
                 
-                f_min_sample, f_max_sample = file_matrix["🌅 Sáng (05h - 10h)"]
-                with f_tab1: st.altair_chart(draw_vpd_chart(df_processed, f_min_sample, f_max_sample), use_container_width=True)
+                f_min_sample, f_max_sample = file_matrix["🌅 Sáng (05h-10h)"]
+                with f_tab1: st.altair_chart(draw_vpd_chart(df_processed, f_min_sample, f_max_sample), use_container_width=False)
                 with f_tab2: st.altair_chart(draw_temperature_chart(df_processed), use_container_width=True)
                 with f_tab3: st.altair_chart(draw_humidity_chart(df_processed), use_container_width=True)
             with res_right:
