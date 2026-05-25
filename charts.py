@@ -1,164 +1,179 @@
 import altair as alt
 import pandas as pd
 
-def draw_vpd_chart(df, vpd_min, vpd_max):
+def draw_vpd_chart(df, v_min, v_max):
     """
-    Biểu đồ VPD liền mạch 1 trục thời gian duy nhất.
-    Có các đường nét đứt dọc phân chia ranh giới Sáng - Trưa - Chiều - Tối - Khuya kèm nhãn chữ.
+    Vẽ biểu đồ diễn biến chỉ số VPD theo thời gian trong ngày.
+    Đã được cấu hình tăng biên trên (Top Padding) để khắc phục lỗi mất chữ chú thích.
     """
     if df.empty:
-        return alt.Chart(pd.DataFrame()).mark_text().properties(title="Chưa có dữ liệu đồ thị")
+        # Trả về một biểu đồ trống nếu chưa có dữ liệu để tránh crash giao diện
+        return alt.Chart(pd.DataFrame()).mark_blank()
 
-    df_chart = df.copy()
-
-    # 1. ĐỊNH NGHĨA CÁC VÙNG CẢNH BÁO MÀU NỀN NGANG (Trục Y)
-    wet_limit = max(0.0, vpd_min - 0.2)
-    hot_limit = vpd_max + 0.5
-    
-    zones = pd.DataFrame([
-        {"start": 0.0, "end": wet_limit, "Trạng thái": "🔵 Quá Ẩm"},      
-        {"start": wet_limit, "end": vpd_min, "Trạng thái": "🌐 Ẩm"},       
-        {"start": vpd_min, "end": vpd_max, "Trạng thái": "🟩 Lý Tưởng"},     
-        {"start": vpd_max, "end": hot_limit, "Trạng thái": "💛 Nóng"},          
-        {"start": hot_limit, "end": 2.5, "Trạng thái": "🔴 Quá Nóng"}            
-    ])
-
-    background = alt.Chart(zones).mark_rect(opacity=1.0).encode(
-        y=alt.Y('start:Q', scale=alt.Scale(domain=[0.0, 2.5]), title="Chỉ số VPD (kPa)"),
-        y2='end:Q',
-        color=alt.Color('Trạng thái:N', 
-                        scale=alt.Scale(
-                            domain=["🔵 Quá Ẩm", "🌐 Ẩm", "🟩 Lý Tưởng", "💛 Nóng", "🔴 Quá Nóng"],
-                            range=["#0B5345", "#2980B9", "#27AE60", "#F39C12", "#C0392B"]
-                        ),
-                        legend=alt.Legend(title="Màu Cảnh Báo", orient="top", direction="horizontal"))
+    # 1. Tạo các vùng màu nền đại diện cho các trạng thái của môi trường (Solid background)
+    # Vùng Quá Ẩm (0.0 -> v_min - 0.2)
+    zone_too_wet = alt.Chart(df).mark_rect(opacity=0.9, color='#0B5345').encode(
+        y=alt.value(350),
+        y2=alt.Y('zone_wet_low:Q').datum(0.0)
     )
 
-    horiz_rules_data = pd.DataFrame([{"y": wet_limit}, {"y": vpd_min}, {"y": vpd_max}, {"y": hot_limit}])
-    horiz_rules = alt.Chart(horiz_rules_data).mark_rule(stroke="#17202A", strokeDash=[4, 3], strokeWidth=1.2).encode(y='y:Q')
-
-    # 2. ĐƯỜNG NÉT ĐỨT DỌC PHÂN CHIA CÁC BUỔI TRÊN TRỤC X
-    time_lines = pd.DataFrame([
-        {"Giờ": "05:00", "Nhãn": "🌅 SÁNG (5h)"},
-        {"Giờ": "10:00", "Nhãn": "☀️ TRƯA (10h)"},
-        {"Giờ": "15:00", "Nhãn": "🌇 CHIỀU (15h)"},
-        {"Giờ": "19:00", "Nhãn": "🌌 TỐI (19h)"},
-        {"Giờ": "23:00", "Nhãn": "🌙 KHUYA (23h)"}
-    ])
-    
-    existing_hours = df_chart['Hiển thị Giờ'].unique()
-    time_lines_filtered = time_lines[time_lines['Giờ'].isin(existing_hours)].copy()
-
-    vert_rules = alt.Chart(time_lines_filtered).mark_rule(
-        stroke="#2C3E50", 
-        strokeDash=[6, 4], 
-        strokeWidth=2.0
-    ).encode(
-        x=alt.X('Giờ:N', sort=None)
+    # Vùng Ẩm (v_min - 0.2 -> v_min)
+    zone_wet = alt.Chart(df).mark_rect(opacity=0.9, color='#2980B9').encode(
+        y=alt.Y('zone_wet_low:Q').datum(0.0 if v_min - 0.2 < 0 else v_min - 0.2),
+        y2=alt.Y('zone_wet_high:Q').datum(v_min)
     )
 
-    vert_texts = alt.Chart(time_lines_filtered).mark_text(
-        align='left',
-        dx=5,
-        dy=-175, 
-        fontSize=11,
-        fontWeight='bold',
-        color='#17202A',
-        angle=0
-    ).encode(
-        x=alt.X('Giờ:N', sort=None),
-        text='Nhãn:N'
+    # Vùng Lý Tưởng (v_min -> v_max)
+    zone_ideal = alt.Chart(df).mark_rect(opacity=0.9, color='#27AE60').encode(
+        y=alt.Y('zone_ideal_low:Q').datum(v_min),
+        y2=alt.Y('zone_ideal_high:Q').datum(v_max)
     )
 
-    # 3. ĐƯỜNG TUYẾN TÍNH LIỀN MẠCH VPD
-    line = alt.Chart(df_chart).mark_line(
-        point=alt.OverlayMarkDef(color="#FFFFFF", size=65, filled=True, stroke="#17202A", strokeWidth=1.5), 
-        color="#FFFFFF", 
-        strokeWidth=4.0
+    # Vùng Nóng (v_max -> v_max + 0.5)
+    zone_hot = alt.Chart(df).mark_rect(opacity=0.9, color='#F39C12').encode(
+        y=alt.Y('zone_hot_low:Q').datum(v_max),
+        y2=alt.Y('zone_hot_high:Q').datum(v_max + 0.5)
+    )
+
+    # Vùng Quá Nóng (v_max + 0.5 trở lên)
+    zone_too_hot = alt.Chart(df).mark_rect(opacity=0.9, color='#C0392B').encode(
+        y=alt.Y('zone_toohot_low:Q').datum(v_max + 0.5),
+        y2=alt.Y('zone_toohot_high:Q').datum(3.0) # Ngưỡng trần tối đa hiển thị
+    )
+
+    # 2. Tạo đường vẽ dữ liệu VPD thực tế (Đường Line màu trắng có node tròn)
+    base_data = alt.Chart(df).encode(
+        x=alt.X('Hiển thị Giờ:O', 
+                title='Thời gian chi tiết trong toàn bộ ngày',
+                axis=alt.Axis(labelAngle=-90, labelColor='#2C3E50', titleColor='#2C3E50'))
+    )
+
+    # Đường nối line màu trắng dày
+    vpd_line = base_data.mark_line(
+        color='#FFFFFF', 
+        strokeWidth=3.5, 
+        interpolate='monotone'
     ).encode(
-        x=alt.X('Hiển thị Giờ:N', sort=None, title="Thời gian chi tiết trong toàn bộ ngày"),
+        y=alt.Y('VPD (kPa):Q', 
+                title='Chỉ số VPD (kPa)', 
+                scale=alt.Scale(domain=[0.0, 2.5]),
+                axis=alt.Axis(grid=True, gridDash=[3,3], gridColor='#BDC3C7'))
+    )
+
+    # Các điểm node tròn viền đen lõi trắng trên đường line để dễ tương tác rà chuột (Tooltip)
+    vpd_points = base_data.mark_point(
+        color='#17202A', 
+        fill='#FFFFFF', 
+        size=70, 
+        strokeWidth=2
+    ).encode(
         y=alt.Y('VPD (kPa):Q'),
-        tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)', 'Độ ẩm (%)', 'VPD (kPa)', 'Trạng thái']
+        tooltip=[
+            alt.Tooltip('Hiển thị Giờ:O', title='Thời gian'),
+            alt.Tooltip('Nhiệt độ (°C):Q', title='Nhiệt độ (°C)'),
+            alt.Tooltip('Độ ẩm (%):Q', title='Độ ẩm (%)'),
+            alt.Tooltip('VPD (kPa):Q', title='Chỉ số VPD'),
+            alt.Tooltip('Trạng thái:N', title='Đánh giá')
+        ]
     )
 
-    final_chart = alt.layer(background, horiz_rules, vert_rules, vert_texts, line, data=df_chart).properties(
-        width=850, 
-        height=390,
+    # 3. Gộp toàn bộ các lớp (Layers) đồ thị và cấu hình không gian view bảo vệ chữ
+    combined_chart = alt.layer(
+        zone_too_wet, zone_wet, zone_ideal, zone_hot, zone_too_hot,
+        vpd_line, vpd_points
+    ).properties(
+        width='container',
+        height=350,
+        # Đưa dòng chú thích làm Tiêu đề chính thức của Altair và đẩy cao khoảng cách lên
         title=alt.TitleParams(
-            text="BIỂU ĐỒ CHỈ SỐ VPD LIỀN MẠCH THEO CHU KỲ SINH HỌC TOÀN NGÀY",
-            subtitle=f"Cận dưới: {vpd_min} kPa | Cận trên: {vpd_max} kPa | Khóa dải màu Solid đậm | Vạch đứng phân buổi",
-            anchor="start",
-            fontSize=16,
-            font="Segoe UI",
-            subtitleColor="#2C3E50"
+            text=f"Cạn dưới: {v_min} kPa | Cạn trên: {v_max} kPa | Khoá dải màu Solid đậm | vạch dựng phân buổi",
+            fontSize=13,
+            fontWeight='bold',
+            color='#5D6D7E',
+            offset=22,         # Tạo khoảng trống thông thoáng 22px giữa chữ và đỉnh đồ thị
+            orient='top',
+            anchor='start'     # Căn lề trái bằng với trục Y
         )
-    ).configure_axis(
-        grid=False,
-        labelColor="#17202A",
-        titleColor="#17202A",
-        labelFontSize=11,
-        titleFontSize=12
     ).configure_view(
-        strokeWidth=1,
-        stroke="#BDC3C7" 
+        # ĐÂY LÀ KHỐI LỆNH QUAN TRỌNG NHẤT CỦA CÁCH 1:
+        # Hạ thấp toàn bộ khung đồ thị xuống dưới 45px để chừa chỗ trống cho dòng chú thích bên trên, 
+        # ngăn ngừa thanh công cụ lưu ảnh của Streamlit đè mất chữ.
+        padding={'top': 45, 'bottom': 10, 'left': 15, 'right': 15}
+    ).configure_axis(
+        domain=False
     )
 
-    return final_chart
+    return combined_chart
+
 
 def draw_combined_temp_humidity_chart(df):
     """
-    Biểu đồ lồng nhau (Dual Axes): 
-    - Trục Y bên trái: Nhiệt độ (°C) - Màu đỏ thẫm rực rỡ
-    - Trục Y bên phải: Độ ẩm (%) - Màu xanh dương dịu mát
+    Vẽ biểu đồ lồng nhau theo dõi cặp thông số Nhiệt độ (Line) và Độ ẩm (Bar) song song.
     """
     if df.empty:
-        return alt.Chart(pd.DataFrame()).mark_text().properties(title="Chưa có dữ liệu")
+        return alt.Chart(pd.DataFrame()).mark_blank()
 
+    # Trục chính cơ sở dựa trên chuỗi thời gian
     base = alt.Chart(df).encode(
-        x=alt.X('Hiển thị Giờ:N', sort=None, title="Thời gian")
+        x=alt.X('Hiển thị Giờ:O', title='Mốc chu kỳ thời gian', axis=alt.Axis(labelAngle=-90))
     )
 
-    # Lớp 1: Đường Nhiệt độ (Trục Y bên trái)
-    temp_line = base.mark_line(
-        point=alt.OverlayMarkDef(color="#E74C3C", size=40, filled=True),
-        color="#E74C3C", 
-        strokeWidth=3
-    ).encode(
-        y=alt.Y('Nhiệt độ (°C):Q', 
-                title='🌡️ Nhiệt độ khí (°C)',
-                axis=alt.Axis(titleColor='#E74C3C', labelColor='#E74C3C')),
-        tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)']
-    )
-
-    # Lớp 2: Đường Độ ẩm (Trục Y bên phải độc lập)
-    humidity_line = base.mark_line(
-        point=alt.OverlayMarkDef(color="#3498DB", size=40, filled=True),
-        color="#3498DB", 
-        strokeWidth=3
+    # Đồ thị cột (Bar) biểu diễn Độ ẩm tương đối (%) - Trục bên phải Y2
+    humidity_bar = base.mark_bar(
+        color='#3498DB', 
+        opacity=0.35, 
+        size=15
     ).encode(
         y=alt.Y('Độ ẩm (%):Q', 
-                title='💧 Độ ẩm khí (%)',
-                axis=alt.Axis(titleColor='#3498DB', labelColor='#3498DB'),
-                scale=alt.Scale(domain=[0, 100])),
-        tooltip=['Hiển thị Giờ', 'Độ ẩm (%)']
+                title='Độ ẩm không khí (%)',
+                scale=alt.Scale(domain=[0, 100]),
+                axis=alt.Axis(titleColor='#3498DB', orient='right'))
     )
 
-    # Gộp 2 trục Y nằm lồng nhau trên cùng 1 biểu đồ trục X
-    combined = alt.layer(temp_line, humidity_line).resolve_scale(
-        y='independent'
+    # Đồ thị đường (Line) biểu diễn Nhiệt độ khí hậu (°C) - Trục bên trái Y
+    temp_line = base.mark_line(
+        color='#E74C3C', 
+        strokeWidth=3,
+        interpolate='monotone'
+    ).encode(
+        y=alt.Y('Nhiệt độ (°C):Q', 
+                title='Nhiệt độ môi trường (°C)',
+                scale=alt.Scale(domain=[df['Nhiệt độ (°C)'].min() - 3, df['Nhiệt độ (°C)'].max() + 3]),
+                axis=alt.Axis(titleColor='#E74C3C', orient='left'))
+    )
+
+    # Điểm tròn nhỏ định vị trên đường nhiệt độ giúp soi tooltip
+    temp_points = base.mark_point(
+        color='#E74C3C', 
+        fill='#FFFFFF', 
+        size=35
+    ).encode(
+        y=alt.Y('Nhiệt độ (°C):Q'),
+        tooltip=[
+            alt.Tooltip('Hiển thị Giờ:O', title='Giờ'),
+            alt.Tooltip('Nhiệt độ (°C):Q', title='Nhiệt độ'),
+            alt.Tooltip('Độ ẩm (%):Q', title='Độ ẩm')
+        ]
+    )
+
+    # Kết hợp trục kép (Dual Axis Chart)
+    dual_axis_chart = alt.layer(
+        humidity_bar, 
+        alt.layer(temp_line, temp_points)
+    ).resolve_scale(
+        y='independent'  # Xác định hai trục độc lập nhau
     ).properties(
-        width=850,
-        height=260,
+        width='container',
+        height=220,
         title=alt.TitleParams(
-            text="BIỂU ĐỒ ĐỐI CHIẾU SONG SONG GIỮA NHIỆT ĐỘ & ĐỘ ẨM KHÔNG KHÍ",
-            anchor="start",
-            fontSize=13,
-            fontWeight='bold',
-            color='#2C3E50'
+            text="🌡️ Diễn biến mối tương quan trực quan giữa Nhiệt độ & Độ ẩm tương đối",
+            fontSize=12,
+            color='#34495E',
+            anchor='start',
+            offset=10
         )
     ).configure_view(
-        strokeWidth=1,
-        stroke="#BDC3C7"
+        padding={'top': 15, 'bottom': 10, 'left': 15, 'right': 15}
     )
 
-    return combined
+    return dual_axis_chart
