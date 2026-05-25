@@ -83,31 +83,22 @@ def style_status_rows(row):
     return styles
 
 def get_detailed_analysis_and_action(status, temp, rh):
-    """
-    Hàm bóc tách chính xác 4 trường hợp lỗi môi trường và xuất nguyên nhân + hành động
-    """
     if "Nóng" in status:
-        # TH1: Nóng do nhiệt độ không khí tăng cao
         if temp >= 27.0:
             reason = "🔥 Nóng do Nhiệt độ tăng cao (Bức xạ mặt trời hấp nhiệt nhà kính)"
             action = "Kéo rèm chắn nắng đỉnh 70% + Bật quạt thông gió xả nhiệt gắt."
-        # TH2: Nóng do độ ẩm tụt sâu (Hanh khô)
         else:
             reason = "🌵 Nóng do Độ ẩm tụt quá thấp (Hệ thống thông gió quá mức/Khí hậu hanh)"
             action = "Bật phun sương hạt mịn ngắt quãng để bù ẩm nhanh, tránh sốc khí khổng."
         return reason, action
-        
     elif "Ẩm" in status:
-        # TH3: Ẩm do độ ẩm bão hòa (Tích tụ hơi nước)
         if rh >= 85.0:
             reason = "🌧️ Ẩm do Độ ẩm bão hòa (Đất ướt đọng hơi nước, thiếu lưu thông khí)"
             action = "Bật quạt đối lưu tán cây + Bật quạt hút xả ẩm cưỡng bức. Ngắt tưới."
-        # TH4: Ẩm do nhiệt độ giảm sâu (Trời lạnh)
         else:
             reason = "🥶 Ẩm do Nhiệt độ tụt thấp (Không khí co lại làm tăng độ ẩm tương đối)"
             action = "Đóng kín rèm hông giữ nhiệt ấm + Đốt đèn nhiệt hoặc chạy quạt đảo khí trần."
         return reason, action
-        
     return "🟩 Môi trường dải lý tưởng ổn định", "Duy trì trạng thái tự động tự cân bằng hiện tại."
 
 def trigger_new_data(plant_matrix):
@@ -221,7 +212,7 @@ with tab_future:
         if st.session_state.stt_counter == 0: 
             trigger_new_data(st.session_state.current_matrix)
 
-        # KHỐI MONITOR REALTIME - ĐÃ TÍCH HỢP 4 HƯỚNG XỬ LÝ VÀO Ô GỘP CHUNG CHUYÊN NGHIỆP
+        # KHỐI MONITOR REALTIME
         run_interval = 1 if st.session_state.is_running else 999999
         @st.fragment(run_every=run_interval)
         def live_monitor_panel():
@@ -243,7 +234,6 @@ with tab_future:
             elif v_calc < v_min: stt = "🌐 Ẩm"
             else: stt = "🟩 Lý Tưởng"
             
-            # Gọi hàm bóc tách 4 loại lỗi môi trường kèm hướng xử lý phần cứng
             reason_rt, action_rt = get_detailed_analysis_and_action(stt, st.session_state.temp, st.session_state.rh)
             
             unique_days = sorted(list(set([r["Ngày"] for r in st.session_state.history])), reverse=True)
@@ -284,7 +274,7 @@ with tab_future:
                 if (v_max + 0.5) - cur_v <= 0.1:
                     st.markdown(f"<div class='danger-box-red'>⚠️ SẮP QUÁ NÓNG (Cách ranh giới biến cố {((v_max+0.5)-cur_v):.2f} kPa): Kích hoạt khẩn cấp rèm chắn nắng!</div>", unsafe_allow_html=True)
                 else:
-                    st.markdown(f"<div class='danger-box-yellow'>💛 NÓNG ({sub_reason}): Kéo lưới cắt nắng, bật phun sương ngắt quãng giảm nhiệt.</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='danger-box-yellow'>💛 NÓNG ({sub_reason}): Kéo lưới cắt nắng, bật phun sương ngacht quãng giảm nhiệt.</div>", unsafe_allow_html=True)
             elif cur_v < v_min - 0.2:
                 sub_reason = "Do ĐỘ ẨM tích tụ bão hòa" if st.session_state.rh > 85.0 else "Do TRỜI LẠNH SÂU"
                 st.markdown(f"<div class='danger-box-darkblue'>🔵 QUÁ ẨM ({sub_reason}): Bật quạt đối lưu tán cây, khép ngay hệ thống tưới nhỏ giọt!</div>", unsafe_allow_html=True)
@@ -293,7 +283,7 @@ with tab_future:
                 if cur_v - (v_min - 0.2) <= 0.1:
                     st.markdown(f"<div class='danger-box-darkblue'>⚠️ SẮP QUÁ ẨM (Cách ranh giới đọng sương {(cur_v-(v_min-0.2)):.2f} kPa): Bật toàn bộ quạt hút cưỡng bức xả ẩm!</div>", unsafe_allow_html=True)
                 else:
-                    st.markdown(f"<div class='danger-box-lightblue'>🌐 ẨM ({sub_reason}): Hé bớt rèm hông tăng lưu thông không khí tự nhiên tự hủy ẩm.</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='danger-box-lightblue'>🌐 Ẩm ({sub_reason}): Hé bớt rèm hông tăng lưu thông không khí tự nhiên tự hủy ẩm.</div>", unsafe_allow_html=True)
             else:
                 st.success("🟩 LÝ TƯỞNG: Môi trường hoàn hảo cho cây quang hợp. Duy trì trạng thái ổn định.")
 
@@ -311,20 +301,28 @@ with tab_future:
             b_hien_tai = get_biological_block(sim_dt.hour)
             v_min, v_max = st.session_state.current_matrix[b_hien_tai]
             
-            m_tab1, m_tab2 = st.tabs(["📈 Đồ thị biến động liền mạch", "📋 Bảng nhật ký chi tiết"])
+            # Chỉ sử dụng các Tab để gom các đồ thị phân tích
+            m_tab1, m_tab2 = st.tabs(["📈 Đồ thị biến động liền mạch", "🔍 Biểu đồ phụ trợ"])
             with m_tab1:
                 st.altair_chart(draw_vpd_chart(df_f, v_min, v_max), use_container_width=True)
+            with m_tab2:
                 st.altair_chart(draw_combined_temp_humidity_chart(df_f), use_container_width=True)
                 
-                st.markdown("##### 📝 BẢNG ĐÁNH GIÁ CHUNG THEO CÁC BUỔI TRONG NGÀY (REALTIME)")
-                df_rt_report = analyze_day_by_blocks_rt(st.session_state.history, st.session_state.current_matrix, sel_day)
-                if not df_rt_report.empty:
-                    st.dataframe(df_rt_report, use_container_width=True, hide_index=True)
-                else:
-                    st.info("Chưa có đủ điểm dữ liệu để tổng hợp báo cáo các buổi.")
-                
-            with m_tab2:
-                st.dataframe(df_f[["STT", "Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]].style.apply(style_status_rows, axis=1), use_container_width=True, hide_index=True)
+            # ĐÃ ĐƯA XUỐNG DƯỚI DẠNG DANH SÁCH LIỀN MẠCH THEO THỨ TỰ YÊU CẦU
+            st.markdown("##### 📝 BẢNG ĐÁNH GIÁ CHUNG THEO CÁC BUỔI TRONG NGÀY (REALTIME)")
+            df_rt_report = analyze_day_by_blocks_rt(st.session_state.history, st.session_state.current_matrix, sel_day)
+            if not df_rt_report.empty:
+                st.dataframe(df_rt_report, use_container_width=True, hide_index=True)
+            else:
+                st.info("Chưa có đủ điểm dữ liệu để tổng hợp báo cáo các buổi.")
+            
+            # Bảng Nhật ký chi tiết hiển thị ngay bên dưới bảng đánh giá chung không bị ẩn trong Tab
+            st.markdown("##### 📋 BẢNG NHẬT KÝ CHI TIẾT ĐIỂM DỮ LIỆU CHU KỲ")
+            st.dataframe(
+                df_f[["STT", "Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]].style.apply(style_status_rows, axis=1), 
+                use_container_width=True, 
+                hide_index=True
+            )
 
 with tab_past:
     st.markdown("<h3 style='color: #114B72; font-size: 18px;'>📁 TẢI FILE NHẬT KÝ IOT TRẠM CẢM BIẾN</h3>", unsafe_allow_html=True)
