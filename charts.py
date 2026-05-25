@@ -31,26 +31,32 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
         tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)', 'Độ ẩm (%)', 'VPD (kPa)', 'Trạng thái']
     )
     
-    # Ghép lớp dải nền xếp dưới cùng, đường kẻ và điểm tròn đè lên trên cùng
-    return (rect_under + rect_ideal + rect_over + line + points).properties(height=280).configure_axis(labelAngle=0)
+    # KÍCH HOẠT TÍNH NĂNG .interactive() ĐỂ PHÓNG TO / THU NHỎ VÀ KÉO TRƯỢT BIỂU ĐỒ
+    main_chart = (rect_under + rect_ideal + rect_over + line + points).properties(height=280).interactive()
+    
+    return main_chart.configure_axis(labelAngle=0)
 
 def draw_temperature_chart(df):
     if df.empty: 
         return alt.Chart(pd.DataFrame()).mark_blank()
+    
+    # Bật .interactive() để cho phép phóng to thu nhỏ đồ thị nhiệt độ
     return alt.Chart(df).mark_line(color='#FF4B4B', strokeWidth=2.5).encode(
         x=alt.X('Hiển thị Giờ:O', title='Mốc thời gian', sort=None),
         y=alt.Y('Nhiệt độ (°C):Q', title='Nhiệt độ (°C)'),
         tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)']
-    ).properties(height=280).configure_axis(labelAngle=0)
+    ).properties(height=280).interactive().configure_axis(labelAngle=0)
 
 def draw_humidity_chart(df):
     if df.empty: 
         return alt.Chart(pd.DataFrame()).mark_blank()
+    
+    # Bật .interactive() để cho phép phóng to thu nhỏ đồ thị độ ẩm
     return alt.Chart(df).mark_line(color='#0068C9', strokeWidth=2.5).encode(
         x=alt.X('Hiển thị Giờ:O', title='Mốc thời gian', sort=None),
         y=alt.Y('Độ ẩm (%):Q', title='Độ ẩm (%)'),
         tooltip=['Hiển thị Giờ', 'Độ ẩm (%)']
-    ).properties(height=280).configure_axis(labelAngle=0)
+    ).properties(height=280).interactive().configure_axis(labelAngle=0)
 
 def draw_combined_chart(df):
     if df.empty: 
@@ -64,4 +70,5 @@ def draw_combined_chart(df):
     line2 = base.mark_line(color='#0068C9', strokeWidth=2).encode(y='Độ ẩm (%):Q')
     line3 = base.mark_line(color='#2E7D32', strokeWidth=3.5).encode(y='VPD (kPa):Q')
     
-    return alt.layer(line1, line2, line3).properties(height=280).configure_axis(labelAngle=0)
+    # Bật .interactive() cho đồ thị tổ hợp nhiều đường kẻ
+    return alt.layer(line1, line2, line3).properties(height=280).interactive().configure_axis(labelAngle=0)
