@@ -113,6 +113,7 @@ with tab_future:
                     if st.session_state.stt_counter == 0: trigger_new_data(st.session_state.vpd_range_val[0], st.session_state.vpd_range_val[1])
                     st.rerun()
             with col_btn2:
+                # ĐÃ SỬA THUẬT NGỮ: Chuyển hoàn toàn thành "Tạm dừng" chuẩn chỉ
                 if st.button("⏸️ Tạm dừng", type="secondary", use_container_width=True, key="btn_stop", disabled=not st.session_state.is_running):
                     st.session_state.is_running = False
                     st.rerun()
@@ -138,7 +139,8 @@ with tab_future:
                     st.rerun()
                     
             if st.session_state.is_running: st.caption(f"⏳ Đổi số sau: **{st.session_state.countdown}s**")
-            elif st.session_state.is_completed: st.success("🏁 Hết ngày!")
+            # ĐÃ SỬA THUẬT NGỮ: Kết thúc chu kỳ rõ ràng
+            elif st.session_state.is_completed: st.success("🏁 Hoàn thành chu kỳ ngày!")
 
             current_sim_dt = datetime.strptime(st.session_state.simulated_time, "%Y-%m-%d %H:%M:%S")
             current_date_display = current_sim_dt.strftime("Ngày %d/%m")
@@ -336,7 +338,6 @@ with tab_past:
                 else:
                     df_resampled = df_resample_input.resample("10min").mean().dropna()
                 
-                # CHUẨN HÓA LẠI ĐÂY: Tạo trả lại cột datetime_internal sau khi resample
                 df_resampled["datetime_internal"] = df_resampled.index
                 df_resampled["Hiển thị Giờ"] = df_resampled["datetime_internal"].dt.strftime("%H:%M")
                 df_resampled.reset_index(drop=True, inplace=True)
