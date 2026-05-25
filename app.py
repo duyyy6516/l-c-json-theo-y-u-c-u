@@ -50,7 +50,20 @@ if 'simulated_time' not in st.session_state: st.session_state.simulated_time = "
 if 'file_plant_idx' not in st.session_state: st.session_state.file_plant_idx = 0
 if 'file_vpd_range_val' not in st.session_state: st.session_state.file_vpd_range_val = (0.6, 1.0)
 
-# Hàm định dạng màu nền thông minh cho bảng dữ liệu nhật ký
+# DANH SÁCH CÂY TRỒNG ĐÀ LẠT MỞ RỘNG ĐẦY ĐỦ CÁC NGƯỠNG CHUẨN KHOA HỌC
+DANH_SACH_CAY = {
+    "🍓 Dâu tây Đà Lạt (Hoa / Trái)": (0.6, 1.1),
+    "🍓 Dâu tây Đà Lạt (Giai đoạn ngó/cây con)": (0.4, 0.8),
+    "🌹 Hoa hồng nhà kính (Đà Lạt)": (0.8, 1.3),
+    "🌼 Hoa cúc / Hoa đồng tiền": (0.7, 1.2),
+    "🍅 Cà chua bi / 🫑 Ớt chuông Sweet Palerma": (0.8, 1.4),
+    "🥦 Súp lơ xanh / Bắp cải baby (Rau ăn lá)": (0.5, 1.0),
+    "🥬 Xà lách Thủy canh (Lô lô, Romaine)": (0.4, 0.9),
+    "🌱 Cây giống trong vườn ươm (Cần ẩm cao)": (0.3, 0.7),
+    "🛠️ Tùy chỉnh thủ công ngưỡng riêng": (0.8, 1.2)
+}
+plant_list_keys = list(DANH_SACH_CAY.keys())
+
 def style_status_rows(row):
     styles = [''] * len(row)
     status = str(row['Trạng thái'])
@@ -135,12 +148,11 @@ with tab_future:
                     st.rerun()
                     
         with st.container(border=True):
-            plant_list = ["🍓 Dâu tây Đà Lạt", "🌹 Hoa hồng nhà kính", "🌼 Hoa cúc / Hoa đồng tiền", "🍅 Cà chua bi / 🫑 Ớt chuông", "🛠️ Tùy chỉnh thủ công"]
-            plant_option = st.selectbox("Cây trồng:", plant_list, index=st.session_state.plant_idx, key="plant_select", disabled=st.session_state.is_running, label_visibility="collapsed")
-            st.session_state.plant_idx = plant_list.index(plant_option)
+            plant_option = st.selectbox("Cây trồng mô phỏng:", plant_list_keys, index=st.session_state.plant_idx, key="plant_select", disabled=st.session_state.is_running, label_visibility="collapsed")
+            st.session_state.plant_idx = plant_list_keys.index(plant_option)
             
-            default_range = (0.6, 1.0) if plant_option == "🍓 Dâu tây Đà Lạt" else ((0.8, 1.2) if plant_option == "🌹 Hoa hồng nhà kính" else ((0.7, 1.1) if plant_option == "🌼 Hoa cúc / Hoa đồng tiền" else ((0.8, 1.4) if plant_option == "🍅 Cà chua bi / 🫑 Ớt chuông" else st.session_state.vpd_range_val)))
-            vpd_range = st.slider("Khoảng tối ưu (kPa):", min_value=0.0, max_value=3.0, value=default_range, step=0.1, key="vpd_slider", disabled=st.session_state.is_running or (plant_option != "🛠️ Tùy chỉnh thủ công"))
+            default_range = DANH_SACH_CAY[plant_option] if plant_option != "🛠️ Tùy chỉnh thủ công ngưỡng riêng" else st.session_state.vpd_range_val
+            vpd_range = st.slider("Khoảng tối ưu (kPa):", min_value=0.0, max_value=3.0, value=default_range, step=0.1, key="vpd_slider", disabled=st.session_state.is_running or (plant_option != "🛠️ Tùy chỉnh thủ công ngưỡng riêng"))
             st.session_state.vpd_range_val = vpd_range
             vpd_min, vpd_max = vpd_range
 
@@ -226,7 +238,7 @@ with tab_future:
 
 
 # --------------------------------------------------------
-# 📁 TAB 2: UPLOAD & BULK FILE ANALYTICS (TỰ ĐỘNG CHUẨN HÓA KHI TRÊN 2 NGÀY)
+# 📁 TAB 2: UPLOAD & BULK FILE ANALYTICS (TÍNH NĂNG CHỌN LOẠI CÂY MỚI)
 # --------------------------------------------------------
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 19px;'>📁 TỰ ĐỘNG PHÂN TÍCH FILE IOT NHÀ KÍNH</h3>", unsafe_allow_html=True)
@@ -235,14 +247,13 @@ with tab_past:
     
     with top_left:
         with st.container(border=True):
-            st.markdown("<div class='upload-header'>🌿 1. CẤU HÌNH LOẠI CÂY TRỒNG</div>", unsafe_allow_html=True)
-            file_plant_list = ["🍓 Dâu tây Đà Lạt", "🌹 Hoa hồng nhà kính", "🌼 Hoa cúc / Hoa đồng tiền", "🍅 Cà chua bi / 🫑 Ớt chuông", "🛠️ Tùy chỉnh thủ công"]
-            file_plant_option = st.selectbox("Chọn mô hình cây trồng áp dụng cho file:", file_plant_list, index=st.session_state.file_plant_idx, key="file_plant_select")
-            st.session_state.file_plant_idx = file_plant_list.index(file_plant_option)
+            st.markdown("<div class='upload-header'>🌿 1. CẤU HÌNH LOẠI CÂY TRỒNG ĐÀ LẠT</div>", unsafe_allow_html=True)
+            file_plant_option = st.selectbox("Chọn mô hình cây trồng áp dụng cho file:", plant_list_keys, index=st.session_state.file_plant_idx, key="file_plant_select")
+            st.session_state.file_plant_idx = plant_list_keys.index(file_plant_option)
             
-            file_default_range = (0.6, 1.0) if file_plant_option == "🍓 Dâu tây Đà Lạt" else ((0.8, 1.2) if file_plant_option == "🌹 Hoa hồng nhà kính" else ((0.7, 1.1) if file_plant_option == "🌼 Hoa cúc / Hoa đồng tiền" else ((0.8, 1.4) if file_plant_option == "🍅 Cà chua bi / 🫑 Ớt chuông" else st.session_state.file_vpd_range_val)))
+            file_default_range = DANH_SACH_CAY[file_plant_option] if file_plant_option != "🛠️ Tùy chỉnh thủ công ngưỡng riêng" else st.session_state.file_vpd_range_val
             
-            file_vpd_range = st.slider("Ngưỡng VPD tối ưu thiết lập (kPa):", min_value=0.0, max_value=3.0, value=file_default_range, step=0.1, key="file_vpd_slider", disabled=(file_plant_option != "🛠️ Tùy chỉnh thủ công"))
+            file_vpd_range = st.slider("Ngưỡng VPD tối ưu thiết lập (kPa):", min_value=0.0, max_value=3.0, value=file_default_range, step=0.1, key="file_vpd_slider", disabled=(file_plant_option != "🛠️ Tùy chỉnh thủ công ngưỡng riêng"))
             st.session_state.file_vpd_range_val = file_vpd_range
             file_vpd_min, file_vpd_max = file_vpd_range
 
@@ -305,7 +316,6 @@ with tab_past:
                 except:
                     raw_datetimes.append(datetime.now())
 
-            # --- BỘ LỌC DỮ LIỆU THÔNG MINH SỬA LỖI NHIỆT ĐỘ > 45°C TRÊN CẢM BIẾN ---
             df_raw_calc = pd.DataFrame()
             df_raw_calc["datetime_internal"] = raw_datetimes
             
@@ -335,7 +345,6 @@ with tab_past:
                     df_raw_calc = df_raw_calc[(df_raw_calc["only_date"] >= start_date) & (df_raw_calc["only_date"] <= end_date)]
                     
                 elif "Xem toàn bộ dữ liệu gốc" in time_filter_option:
-                    # Giữ nguyên toàn bộ dải ngày có trong file không lọc bớt ngày nào
                     pass
                 else:
                     max_time_in_file = df_raw_calc["datetime_internal"].max()
@@ -350,20 +359,15 @@ with tab_past:
 
             if len(df_raw_calc) > 0:
                 unique_days_filtered = df_raw_calc["only_date"].nunique()
-                
                 df_resample_input = df_raw_calc[["datetime_internal", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD_raw"]].copy()
                 df_resample_input.set_index("datetime_internal", inplace=True)
                 
-                # --- THAY ĐỔI QUAN TRỌNG: GỘP DỮ LIỆU THÔNG MINH CHO CẢ CHẾ ĐỘ XEM TOÀN BỘ FILE ---
                 if any(k in time_filter_option for k in ["1 Tuần gần nhất", "1 Tháng gần nhất", "tiếp theo"]):
-                    # Nhiều ngày thì gộp gom trung bình theo Từng Ngày
                     df_resampled = df_resample_input.resample("1D").mean().dropna()
                 elif "Xem toàn bộ dữ liệu gốc" in time_filter_option:
                     if unique_days_filtered > 2:
-                        # Nếu file gồm nhiều ngày, tự động gộp gom trung bình mỗi 1 Giờ để biểu đồ mượt mà
                         df_resampled = df_resample_input.resample("1h").mean().dropna()
                     else:
-                        # Nếu file ngắn (chỉ 1-2 ngày), gộp gom theo mốc 10 phút
                         df_resampled = df_resample_input.resample("10min").mean().dropna()
                 elif "1 Ngày gần nhất" in time_filter_option:
                     df_resampled = df_resample_input.resample("10min").mean().dropna()
@@ -371,8 +375,6 @@ with tab_past:
                     df_resampled = df_resample_input.copy()
                 
                 df_resampled["datetime_internal"] = df_resampled.index
-                
-                # Định dạng nhãn trục thời gian dựa vào độ dài dữ liệu
                 if any(k in time_filter_option for k in ["1 Tuần gần nhất", "1 Tháng gần nhất", "tiếp theo"]) or ( "Xem toàn bộ dữ liệu gốc" in time_filter_option and unique_days_filtered > 2 ):
                     df_resampled["Hiển thị Giờ"] = df_resampled["datetime_internal"].dt.strftime("%d/%m %H:%M")
                 else:
@@ -419,7 +421,6 @@ with tab_past:
                 with file_sub_tab3: st.altair_chart(draw_humidity_chart(df_processed), use_container_width=True)
                 with file_sub_tab4: st.altair_chart(draw_combined_chart(df_processed), use_container_width=True)
                 
-            # --- BẢNG NHẬT KÝ THEO DÕI ĐIỂM GỘP CHU KỲ ---
             with res_right:
                 st.markdown("<div style='font-weight:bold; color:#1A5276; margin-bottom:5px;'>📋 BẢNG NHẬT KÝ THEO DÕI ĐIỂM GỘP CHU KỲ</div>", unsafe_allow_html=True)
                 preview_cols = ["Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]
@@ -440,7 +441,6 @@ with tab_past:
                     use_container_width=True
                 )
 
-            # --- BÁO CÁO PHÂN TÍCH TỔNG HỢP THEO BUỔI CHU KỲ ---
             st.markdown("---")
             st.markdown(f"##### 📊 BÁO CÁO PHÂN TÍCH TỔNG HỢP THEO BUỔI CHU KỲ (Dữ liệu gốc từ File)")
             
@@ -455,7 +455,6 @@ with tab_past:
                     else: return "🌙 Khuya (23h - 05h)"
                 
                 df_for_block_analysis["Buổi"] = df_for_block_analysis["Hour"].apply(assign_block)
-                
                 block_summary = df_for_block_analysis.groupby("Buổi").agg({
                     "Nhiệt độ (°C)": "mean", "Độ ẩm (%)": "mean", "VPD_raw": "mean"
                 }).reindex(["🌅 Sáng (05h - 10h)", "☀️ Trưa (10h - 15h)", "🌇 Chiều (15h - 19h)", "🌌 Tối (19h - 23h)", "🌙 Khuya (23h - 05h)"]).dropna()
@@ -486,7 +485,6 @@ with tab_past:
                     })
                 
                 df_block_report = pd.DataFrame(block_report_rows)
-                
                 styled_df_block = df_block_report.style.apply(lambda r: [
                     'background-color: #E8F5E9; color: #1B5E20; font-weight: bold;' if "LÝ TƯỞNG" in str(r["Đánh giá"]) 
                     else ('background-color: #FFEBEE; color: #B71C1C; font-weight: bold;' if "Quá khô" in str(r["Đánh giá"]) 
