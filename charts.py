@@ -4,17 +4,17 @@ import pandas as pd
 def draw_vpd_chart(df, v_min=None, v_max=None):
     """
     Vẽ đường diễn biến VPD phong cách tối giản tuyệt đối (Minimalism).
-    Tách biệt tiêu đề thành thành phần độc lập để chống lỗi ăn mất chữ trong Streamlit.
+    Sửa tận gốc lỗi TypeError bằng cách cấu hình view ở lớp ngoài cùng của vconcat.
     """
     if df.empty:
         return alt.Chart(pd.DataFrame()).mark_blank()
 
-    # Tạo bản sao dữ liệu và cấu hình trục X dạng thời gian chuẩn
+    # Tạo bản sao dữ liệu và cấu hình trục X dạng thời gian chuẩn để cuộn zoom tự do
     df_chart = df.copy()
     df_chart['Thời Gian Chuẩn'] = pd.to_datetime(df_chart['Hiển thị Giờ'], format='%H:%M', errors='coerce')
     df_chart = df_chart.dropna(subset=['Thời Gian Chuẩn']).sort_values('Thời Gian Chuẩn')
 
-    # 1. TẠO TIÊU ĐỀ ĐỘC LẬP: Đảm bảo hiển thị FULL 100% chữ, không bị đồ thị ăn mất
+    # 1. TẠO TIÊU ĐỀ ĐỘC LẬP: Đảm bảo hiển thị FULL 100% chữ, đứng riêng ở tầng trên
     title_text = alt.Chart(pd.DataFrame([{}])).mark_text(
         text='📉 BIỂU ĐỒ THEO DÕI SỨC KHỎE CÂY TRỒNG (VPD THỰC TẾ)',
         dx=0, dy=0, fontSize=14, fontWeight='bold', color='#2C3E50', align='left'
@@ -25,7 +25,7 @@ def draw_vpd_chart(df, v_min=None, v_max=None):
         dx=0, dy=0, fontSize=11, color='#566573', align='left'
     ).properties(width='container', height=15)
 
-    # 2. XÂY DỰNG THÂN ĐỒ THỊ
+    # 2. XÂY DỰNG THÂN ĐỒ THỊ THÔ (Chưa cấu hình view để không gây lỗi vconcat)
     base = alt.Chart(df_chart).encode(
         x=alt.X('Thời Gian Chuẩn:T', 
                 title='Mốc Thời Gian Trong Ngày', 
@@ -54,19 +54,19 @@ def draw_vpd_chart(df, v_min=None, v_max=None):
 
     body_chart = alt.layer(vpd_line, vpd_points, *rule_charts).properties(
         height=300
-    ).interactive().configure_view(
+    ).interactive()
+
+    # 3. GỘP BIỂU ĐỒ VÀ TIÊU ĐỀ, SAU ĐÓ MỚI CẤU HÌNH VIEW NGOÀI CÙNG (Sửa lỗi hoàn toàn)
+    final_chart = alt.vconcat(title_text, subtitle_text, body_chart).spacing(5).configure_view(
         strokeWidth=0
     )
-
-    # Gộp Tiêu đề và Đồ thị theo chiều dọc để bảo vệ chữ tuyệt đối
-    final_chart = alt.vconcat(title_text, subtitle_text, body_chart).spacing(5)
     return final_chart
 
 
 def draw_combined_temp_humidity_chart(df):
     """
     Vẽ biểu đồ tương quan Nhiệt - Ẩm trục kép dạng Đường (Line Chart).
-    Giải quyết triệt để lỗi ăn mất tiêu đề bằng cách tách tiêu đề ra khỏi khối trục độc lập.
+    Giải quyết triệt để lỗi ăn mất tiêu đề và tương thích tuyệt đối với Altair v6.
     """
     if df.empty:
         return alt.Chart(pd.DataFrame()).mark_blank()
@@ -76,7 +76,7 @@ def draw_combined_temp_humidity_chart(df):
     df_chart['Thời Gian Chuẩn'] = pd.to_datetime(df_chart['Hiển thị Giờ'], format='%H:%M', errors='coerce')
     df_chart = df_chart.dropna(subset=['Thời Gian Chuẩn']).sort_values('Thời Gian Chuẩn')
 
-    # 1. TẠO TIÊU ĐỀ ĐỘC LẬP: Đứng riêng biệt phía trên lớp trục kép, hiển thị trọn vẹn 100%
+    # 1. TẠO TIÊU ĐỀ ĐỘC LẬP: Hiển thị trọn vẹn 100% không lo bị nuốt chữ
     title_text = alt.Chart(pd.DataFrame([{}])).mark_text(
         text='🌡️ ĐỘNG HỌC MÔI TRƯỜNG: MỐI QUAN HỆ NHIỆT - ẨM CHU KỲ',
         dx=0, dy=0, fontSize=14, fontWeight='bold', color='#2C3E50', align='left'
@@ -87,7 +87,7 @@ def draw_combined_temp_humidity_chart(df):
         dx=0, dy=0, fontSize=11, color='#566573', align='left'
     ).properties(width='container', height=15)
 
-    # 2. XÂY DỰNG THÂN ĐỒ THỊ TRỤC KÉP
+    # 2. XÂY DỰNG THÂN ĐỒ THỊ TRỤC KÉP THÔ
     base = alt.Chart(df_chart).encode(
         x=alt.X('Thời Gian Chuẩn:T', 
                 title='Mốc Thời Gian Trong Ngày', 
@@ -134,6 +134,8 @@ def draw_combined_temp_humidity_chart(df):
         height=260
     ).interactive()
 
-    # Ghép nối khối Tiêu đề độc lập nằm ngay ngắn phía trên thân đồ thị trục kép
-    final_combined = alt.vconcat(title_text, subtitle_text, body_chart).spacing(5)
+    # 3. KẾT HỢP VÀ ĐỂ HÀM CẤU HÌNH GIAO DIỆN Ở NGOÀI CÙNG
+    final_combined = alt.vconcat(title_text, subtitle_text, body_chart).spacing(5).configure_view(
+        strokeWidth=0
+    )
     return final_combined
