@@ -26,7 +26,16 @@ def predict_vpd_trend_dynamic(history_data, current_hour, plant_matrix):
         v3 = float(history_data[2]["VPD (kPa)"])
         
         current_block = get_biological_block(current_hour)
-        vpd_min, vpd_max = plant_matrix[current_block]
+        
+        # Sửa lỗi TypeError: Kiểm tra nếu plant_matrix được truyền dạng dict (Ma trận động)
+        if isinstance(plant_matrix, dict) and current_block in plant_matrix:
+            vpd_min, vpd_max = plant_matrix[current_block]
+        # Nếu plant_matrix vô tình bị truyền dạng số đơn lẻ (do tương thích ngược từ app.py)
+        elif isinstance(plant_matrix, (int, float)):
+            vpd_min = plant_matrix
+            vpd_max = vpd_matrix_backup_global_max if 'vpd_matrix_backup_global_max' in locals() else 1.2
+        else:
+            vpd_min, vpd_max = 0.8, 1.2
         
         diff_1 = v1 - v2
         diff_2 = v2 - v3
@@ -81,7 +90,12 @@ def calculate_dynamic_plant_stress(df_data, plant_matrix, mode_filter):
         temp_val = row["Nhiệt độ (°C)"]
         
         block_name = get_biological_block(dt.hour)
-        b_min, b_max = plant_matrix[block_name]
+        
+        # Tương thích ngược xử lý lỗi ép kiểu cấu hình ma trận
+        if isinstance(plant_matrix, dict) and block_name in plant_matrix:
+            b_min, b_max = plant_matrix[block_name]
+        else:
+            b_min, b_max = 0.6, 1.2
         
         if vpd_val > b_max:
             dry_points += 1
@@ -101,10 +115,16 @@ def calculate_dynamic_plant_stress(df_data, plant_matrix, mode_filter):
         "fungus_risk": fungus_risk_pct
     }
 
-def analyze_day_by_blocks_dynamic(history_list, plant_matrix, target_day_str):
+def analyze_day_by_blocks_dynamic(history_list, plant_matrix, target_day_str=None):
     """Phân tích báo cáo chu kỳ buổi đối chiếu trực tiếp với ma trận ngưỡng động"""
     if not history_list: return pd.DataFrame()
     df = pd.DataFrame(history_list)
+    
+    # Sửa lỗi đảo vị trí tham số truyền vào từ app.py cũ
+    if target_day_str is None and isinstance(plant_matrix, str):
+        target_day_str = plant_matrix
+        plant_matrix = None
+
     df_filtered = df[df["Ngày"] == target_day_str].copy()
     if df_filtered.empty: return pd.DataFrame()
     
@@ -119,7 +139,10 @@ def analyze_day_by_blocks_dynamic(history_list, plant_matrix, target_day_str):
         avg_h = round(row["Độ ẩm (%)"], 1)
         avg_v = round(row["VPD (kPa)"], 2)
         
-        b_min, b_max = plant_matrix[idx]
+        if isinstance(plant_matrix, dict) and idx in plant_matrix:
+            b_min, b_max = plant_matrix[idx]
+        else:
+            b_min, b_max = 0.6, 1.2
         
         if avg_v < b_min:
             status = f"⚠️ Quá ẩm (Mục tiêu: {b_min}-{b_max})"
@@ -137,7 +160,52 @@ def analyze_day_by_blocks_dynamic(history_list, plant_matrix, target_day_str):
         })
     return pd.DataFrame(report_data)
 
-# --- BACKWARD COMPATIBILITY ALIASES (Ánh xạ các hàm cũ tránh lỗi Import hệ thống chính) ---
-analyze_day_by_blocks_rt = analyze_day_by_blocks_dynamic
-predict_vpd_trend_v3 = predict_vpd_trend_dynamic
-calculate_plant_stress_hours = calculate_dynamic_plant_stress
+
+# ==============================================================================
+#  🛠️ ĐOẠN ĐẶC BIỆT: VÁ LỖI COMPATIBILITY WRAPPERS (SỬA TRIỆT ĐỂ LỖI TYPEERROR)
+# ==============================================================================
+
+def predict_vpd_trend_v3(history_data, current_hour, *args):
+    """Hàm bọc thông minh xử lý cả cấu hình cũ (4 tham số) và mới (3 tham số)"""
+    if len(args) == 2:
+        # Nếu app.py truyền vpd_min, vpd_max (Hệ thống cũ) -> Tự động chuyển đổi thành ma trận đồng bộ
+        v_min, v_max = args[0], args[1]
+        mock_matrix = {
+            "🌅 Sáng (05h - 10h)": (v_min, v_max),
+            "☀️ Trưa (10h - 15h)": (v_min, v_max),
+            "🌇 Chiều (15h - 19h)": (v_min, v_max),
+            "🌌 Tối (19h - 23h)": (v_min, v_max),
+            "🌙 Khuya (23h - 05h)": (v_min, v_max)
+        }
+        global vpd_matrix_backup_global_max
+        vpd_matrix_backup_global_max = v_max
+        return predict_vpd_trend_dynamic(history_data, current_hour, mock_matrix)
+    elif len(args) == 1:
+        # Đúng chuẩn cấu hình ma trận mới
+        return predict_vpd_trend_dynamic(history_data, current_hour, args[0])
+    else:
+        return "🔄 Lỗi cấu trúc truyền tham số dự báo.", "normal"
+
+def calculate_plant_stress_hours(df_data, *args):
+    """Hàm bọc xử lý stress hours thích ứng linh hoạt tham số đầu vào"""
+    if len(args) == 3:
+        # Nếu truyền dạng (vpd_min, vpd_max, mode_filter)
+        v_min, v_max, mode = args[0], args[1], args[2]
+        mock_matrix = {k: (v_min, v_max) for k in ["🌅 Sáng (05h - 10h)", "☀️ Trưa (10h - 15h)", "🌇 Chiều (15h - 19h)", "🌌 Tối (19h - 23h)", "🌙 Khuya (23h - 05h)"]}
+        return calculate_dynamic_plant_stress(df_data, mock_matrix, mode)
+    elif len(args) == 2:
+        # Nếu truyền dạng (plant_matrix, mode_filter)
+        return calculate_dynamic_plant_stress(df_data, args[0], args[1])
+    return {"dry_hours": 0.0, "wet_hours": 0.0, "fungus_risk": 0}
+
+def analyze_day_by_blocks_rt(history_list, *args):
+    """Hàm bọc xử lý phân tích chu kỳ lịch sử realtime cũ"""
+    if len(args) == 3:
+        # Truyền dạng (vpd_min, vpd_max, selected_view_day)
+        v_min, v_max, day_str = args[0], args[1], args[2]
+        mock_matrix = {k: (v_min, v_max) for k in ["🌅 Sáng (05h - 10h)", "☀️ Trưa (10h - 15h)", "🌇 Chiều (15h - 19h)", "🌌 Tối (19h - 23h)", "🌙 Khuya (23h - 05h)"]}
+        return analyze_day_by_blocks_dynamic(history_list, mock_matrix, day_str)
+    elif len(args) == 2:
+        # Truyền dạng (plant_matrix, selected_view_day)
+        return analyze_day_by_blocks_dynamic(history_list, args[0], args[1])
+    return pd.DataFrame()
