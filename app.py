@@ -3,7 +3,7 @@ import pandas as pd
 import json
 from datetime import datetime, timedelta
 
-# Import các module nội bộ từ kho hệ thống
+# Import các module nội bộ từ kho hệ thống (Hợp nhất chính xác tất cả các hàm đang được gọi)
 from calculations import calculate_vpd, get_weather_by_time
 from services import send_telegram_message, get_quick_solution
 from analytics import (
@@ -20,10 +20,10 @@ from charts import draw_temperature_chart, draw_humidity_chart, draw_vpd_chart, 
 TELE_TOKEN = "8917951413:AAE6LKUEfYEYiQrFWGoKsQn0tumZc_XbcHg"
 TELE_CHAT_ID = "7290661009"
 
-# Cấu hình Page duy nhất ở đầu file
+# Cấu hình giao diện trang duy nhất ở đầu file
 st.set_page_config(page_title="VPD Hybrid Farm Analytics", page_icon="🌿", layout="wide")
 
-# CẤU HÌNH GIAO DIỆN CHUYÊN NGHIỆP CAO
+# CẤU HÌNH GIAO DIỆN CHUYÊN NGHIỆP CAO (CSS)
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"] {
@@ -57,7 +57,7 @@ if 'simulated_time' not in st.session_state: st.session_state.simulated_time = "
 if 'file_plant_idx' not in st.session_state: st.session_state.file_plant_idx = 0
 if 'file_vpd_range_val' not in st.session_state: st.session_state.file_vpd_range_val = (0.6, 1.1)
 
-# CẤU HÌNH 9 LOẠI CÂY TRỒNG ĐÀ LẠT PHỔ BIẾN
+# CẤU HÌNH CÁC LOẠI CÂY TRỒNG ĐÀ LẠT PHỔ BIẾN
 DANH_SACH_CAY = {
     "🍓 Dâu tây Đà Lạt (Hoa / Trái)": (0.6, 1.1),
     "🍓 Dâu tây Đà Lạt (Giai đoạn ngó/cây con)": (0.4, 0.8),
@@ -71,7 +71,7 @@ DANH_SACH_CAY = {
 }
 plant_list_keys = list(DANH_SACH_CAY.keys())
 
-# MA TRẬN ĐỘNG THEO BUỔI
+# MA TRẬN ĐỘNG THEO CHU KỲ BUỔI SINH HỌC
 DANH_SACH_MA_TRAN_CAY = {
     "🍓 Dâu tây Đà Lạt (Hoa / Trái)": {
         "🌅 Sáng (05h - 10h)": (0.6, 1.0), "☀️ Trưa (10h - 15h)": (0.8, 1.2), "🌇 Chiều (15h - 19h)": (0.6, 1.0), "🌌 Tối (19h - 23h)": (0.4, 0.8), "🌙 Khuya (23h - 05h)": (0.3, 0.6)
@@ -91,6 +91,7 @@ plant_keys = list(DANH_SACH_MA_TRAN_CAY.keys())
 if 'current_matrix' not in st.session_state: 
     st.session_state.current_matrix = DANH_SACH_MA_TRAN_CAY[plant_keys[0]].copy()
 
+# Hàm tạo màu nền cho các dòng trạng thái (Chỉ khai báo 1 lần duy nhất)
 def style_status_rows(row):
     styles = [''] * len(row)
     status = str(row['Trạng thái'])
@@ -124,7 +125,7 @@ def trigger_new_data(vpd_min, vpd_max):
     
     st.session_state.history.insert(0, {
         "STT": st.session_state.stt_counter, "Ngày": current_date_str,
-        "Thời gian mô phỏng": current_sim_datetime, "Hiển ti Giờ": current_sim_datetime.strftime("%H:%M"),
+        "Thời gian mô phỏng": current_sim_datetime, "Hiển thị Giờ": current_sim_datetime.strftime("%H:%M"),
         "datetime_internal": current_sim_datetime,
         "Nhiệt độ (°C)": st.session_state.temp, "Độ ẩm (%)": st.session_state.rh,
         "VPD (kPa)": round(new_vpd, 2), "Trạng thái": status_text
@@ -166,7 +167,7 @@ def trigger_next_manual_point():
     
     st.session_state.history.insert(0, {
         "STT": st.session_state.stt_counter, "Ngày": current_sim_dt.strftime("Ngày %d/%m"),
-        "Thời gian mô phỏng": current_sim_dt, "Hiển thị Giờ": current_sim_dt.strftime("%H:%M"),
+        "Thời gian mô phỏng": current_sim_dt, "Hiển thị Giờ": current_sim_dt.strftime("%H:%M"), # Sửa lỗi chính tả biến từ file gốc
         "datetime_internal": current_sim_dt, "Nhiệt độ (°C)": st.session_state.temp, "Độ ẩm (%)": st.session_state.rh,
         "VPD (kPa)": round(new_vpd, 2), "Trạng thái": status_text
     })
@@ -192,11 +193,11 @@ def trigger_next_manual_point():
         st.session_state.is_completed = True
     st.session_state.simulated_time = next_dt.strftime("%Y-%m-%d %H:%M:%S")
 
-# Phân chia Tab lớn chính
+# Chia ứng dụng làm 2 Tab chức năng lớn
 tab_future, tab_past = st.tabs(["🔮 XEM DỰ BÁO & THEO DÕI TƯƠNG LAI", "📁 TẢI FILE & PHÂN TÍCH LỊCH SỬ"])
 
 # --------------------------------------------------------
-# TAB 1: MA TRẬN ĐỘNG THEO BUỔI & MONITORING REALTIME
+# TAB 1: MA TRẬN ĐỘNG THEO BUỔI & GIÁM SÁT REALTIME
 # --------------------------------------------------------
 with tab_future:
     left_col, right_col = st.columns([3.8, 6.2])
@@ -307,7 +308,7 @@ with tab_future:
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
 # --------------------------------------------------------
-# 📁 TAB 2: UPLOAD FILE IOT & PHÂN TÍCH LỊCH SỬ NÂNG CAO
+# 📁 TAB 2: PHÂN TÍCH FILE IOT THEO DẢI CỐ ĐỊNH PHIÊN BẢN GỐC
 # --------------------------------------------------------
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 19px;'>📁 PHÂN TÍCH CHUYÊN SÂU FILE IOT NHÀ KÍNH</h3>", unsafe_allow_html=True)
@@ -378,7 +379,7 @@ with tab_past:
                 with k3: st.markdown(f"<div class='metric-card-upload'><span style='font-size:12px;color:grey;'>💧 ĐỘ ẨM TRUNG BÌNH</span><br><b style='font-size:18px;color:#0068C9;'>{df_calc['Độ ẩm (%)'].mean():.1f} %</b></div>", unsafe_allow_html=True)
                 with k4: st.markdown(f"<div class='metric-card-upload'><span style='font-size:12px;color:grey;'>📋 TỔNG SỐ ĐIỂM SỐ GHI</span><br><b style='font-size:18px;color:#5D6D7E;'>{len(df_calc)} điểm</b></div>", unsafe_allow_html=True)
 
-                # Đánh giá Agronomy
+                # Tính toán Stress Nông học bản cũ ổn định
                 stress = calculate_static_plant_stress(df_calc, f_vpd_range[0], f_vpd_range[1], t_filter_opt)
                 st.error(f"⚠️ **Đánh giá Agronomy:** Tích lũy Stress Khô: `{stress['dry_hours']} giờ` | Tích lũy Stress Ẩm: `{stress['wet_hours']} giờ` | Nguy cơ bùng phát nấm bệnh tại vườn: `{stress['fungus_risk']}%`")
 
