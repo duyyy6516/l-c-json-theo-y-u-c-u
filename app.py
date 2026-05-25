@@ -19,7 +19,7 @@ TELE_CHAT_ID = "7290661009"
 
 st.set_page_config(page_title="VPD Smart Farm Monitor Pro", page_icon="🌿", layout="wide")
 
-# Áp dụng cấu hình CSS an toàn tránh lỗi xử lý chuỗi trên hệ thống mới
+# Áp dụng cấu hình CSS an toàn tránh lỗi xử lý chuỗi trên hệ thống mới Python 3.14+
 st.html(
     """
     <style>
@@ -35,10 +35,10 @@ st.html(
 st.title("🌿 VPD Smart Farm Monitor Pro — Hệ Thống Giám Sát Vi Khí Hậu Thông Minh")
 st.write("Giải pháp phân tích chỉ số Thâm hụt áp suất hơi (VPD) nông nghiệp công nghệ cao.")
 
-# CHIA TÁCH WEB THÀNH 2 MỤC ĐỘC LẬP THEO YÊU CẦU: REALTIME VS ĐỌC FILE JSON
+# CHIA TÁCH WEB THÀNH 2 MỤC ĐỘC LẬP: REALTIME VS ĐỌC FILE JSON
 tab_realtime, tab_json = st.tabs(["⚡ PHÂN TÍCH VPD REALTIME", "📂 ĐỌC VÀ XỬ LÝ FILE JSON"])
 
-# Hàm tiện ích lấy ma trận sinh học cây trồng từ file gốc của bạn
+# Hàm tiện ích lấy ma trận sinh học cây trồng chuẩn hóa tương thích với analytics.py của bạn
 def get_plant_matrix_by_choice(choice):
     if "Dâu Tây" in choice:
         return {
@@ -66,7 +66,7 @@ def get_plant_matrix_by_choice(choice):
         }
 
 # =====================================================================
-# MỤC 1: PHÂN TÍCH VPD REALTIME (Giữ nguyên vẹn logic gốc của bạn)
+# MỤC 1: PHÂN TÍCH VPD REALTIME 
 # =====================================================================
 with tab_realtime:
     st.header("⚡ Trạm Mô Phỏng & Giám Sát Môi Trường Realtime")
@@ -127,19 +127,21 @@ with tab_realtime:
         else:
             st.success("🟩 Môi trường lý tưởng! Chỉ số vi khí hậu đang nằm trong dải phát triển sinh sinh học tối ưu của cây.")
 
-        # Tạo chu kỳ mốc 24h
+        # Tạo tập dữ liệu lịch sử tuần hoàn 24h đầy đủ
         records_24h = []
         base_today = datetime.now().replace(hour=0, minute=0, second=0)
         for h in range(24):
             for m in [0, 30]:
                 dt_loop = base_today + timedelta(hours=h, minutes=m)
                 t_l, r_l = get_weather_by_time(dt_loop)
+                # Đảm bảo gán thêm cột 'Buổi' để tương thích tuyệt đối với hàm gộp groupby() của analytics.py
                 records_24h.append({
                     "Hiển thị Giờ": dt_loop.strftime("%H:%M"),
                     "Nhiệt độ (°C)": t_l,
                     "Độ ẩm (%)": r_l,
                     "VPD (kPa)": calculate_vpd(t_l, r_l),
-                    "Giờ": h
+                    "Giờ": h,
+                    "Buổi": get_biological_block(h)
                 })
         df_sim_24h = pd.DataFrame(records_24h)
         
@@ -147,8 +149,13 @@ with tab_realtime:
         st.altair_chart(draw_combined_temp_humidity_chart(df_sim_24h), use_container_width=True)
         
         st.subheader("📋 Phân Tích Khối Chu Kỳ & Đề Xuất Thiết Bị")
-        df_report_rt = analyze_day_by_blocks_rt(df_sim_24h, current_matrix)
-        st.dataframe(df_report_rt, use_container_width=True, hide_index=True)
+        
+        # SỬA LỖI TYPEERROR: Thực hiện bọc try-except an toàn, đồng thời đảm bảo cấu trúc cột đầu vào luôn có 'Buổi'
+        try:
+            df_report_rt = analyze_day_by_blocks_rt(df_sim_24h, current_matrix)
+            st.dataframe(df_report_rt, use_container_width=True, hide_index=True)
+        except Exception as report_err:
+            st.error(f"⚠️ Không thể trích xuất bảng báo cáo phân tích tự động. Chi tiết lỗi hệ thống: {str(report_err)}")
         
         if st.button("📤 Phát Lệnh Cảnh Báo Khẩn Cấp Lên Telegram", type="primary", key="btn_tele_realtime"):
             if TELE_TOKEN and TELE_CHAT_ID:
@@ -167,7 +174,7 @@ with tab_realtime:
                     st.error("❌ Kết nối API Telegram thất bại.")
 
 # =====================================================================
-# MỤC 2: ĐỌC VÀ XỬ LÝ FILE JSON (Kế thừa toàn bộ chức năng từ mục 1)
+# MỤC 2: ĐỌC VÀ XỬ LÝ FILE JSON 
 # =====================================================================
 with tab_json:
     st.header("📂 Hệ Thống Phân Tích Chỉ Số Từ Tệp Tin JSON")
@@ -190,12 +197,10 @@ with tab_json:
             if raw_records:
                 records_parsed = []
                 for idx, item in enumerate(raw_records):
-                    # Đọc khóa dữ liệu linh hoạt (Hỗ trợ cả trường tiếng Anh lẫn tiếng Việt)
                     temp = float(item.get("temperature", item.get("Nhiệt độ (°C)", item.get("Nhiệt độ", 25.0))))
                     rh = float(item.get("humidity", item.get("Độ ẩm (%)", item.get("Độ ẩm", 70.0))))
                     ts_str = item.get("timestamp", item.get("Hiển thị Giờ", item.get("Thời gian")))
                     
-                    # Xử lý chuẩn hóa thời gian trục tọa độ
                     if ts_str:
                         ts_str = str(ts_str)
                         if ":" in ts_str and len(ts_str) <= 5:
@@ -216,15 +221,16 @@ with tab_json:
                         hour_val = int((idx * 24 / len(raw_records)) % 24)
                         display_time = f"{hour_val:02d}:00"
                     
-                    # Tính toán chỉ số VPD tự động dựa trên thuật toán cốt lõi trong calculations.py
                     vpd_val = calculate_vpd(temp, rh)
                     
+                    # Luôn gán kèm cột 'Buổi' tương tự để bảo vệ dữ liệu khỏi lỗi TypeError
                     records_parsed.append({
                         "Hiển thị Giờ": display_time,
                         "Nhiệt độ (°C)": temp,
                         "Độ ẩm (%)": rh,
                         "VPD (kPa)": vpd_val,
-                        "Giờ": hour_val
+                        "Giờ": hour_val,
+                        "Buổi": get_biological_block(hour_val)
                     })
                 
                 df_json = pd.DataFrame(records_parsed)
@@ -240,11 +246,9 @@ with tab_json:
                 )
                 json_matrix = get_plant_matrix_by_choice(json_preset_choice)
                 
-                # Tính toán tổng số giờ stress tích lũy của cây dựa trên hàm phân tích có sẵn
                 json_stress_hours, _ = calculate_plant_stress_hours(df_json, json_matrix)
                 st.warning(f"⚠️ **Thống kê tích lũy JSON:** Tổng thời lượng cây chịu áp lực Stress VPD nguy hại: **{json_stress_hours:.1f} giờ**")
                 
-                # Hiển thị Metric tổng hợp số liệu trung bình y hệt mục Realtime
                 st.subheader("📊 Số Liệu Cảm Biến Trung Bình Chu Kỳ File")
                 m_j1, m_j2, m_j3, m_j4 = st.columns(4)
                 m_j1.metric("Nhiệt Độ TB", f"{df_json['Nhiệt độ (°C)'].mean():.1f} °C")
@@ -252,41 +256,43 @@ with tab_json:
                 m_j3.metric("Điểm Sương TB", f"{calculate_dew_point(df_json['Nhiệt độ (°C)'].mean(), df_json['Độ ẩm (%)'].mean()):.1f} °C")
                 m_j4.metric("VPD Trung Bình", f"{df_json['VPD (kPa)'].mean():.2f} kPa")
                 
-                # Tái sử dụng module đồ thị Altair từ charts.py
                 st.subheader("📈 Đồ Thị Diễn Biến Chỉ Số Vi Khí Hậu Từ File JSON")
                 st.altair_chart(draw_vpd_chart(df_json), use_container_width=True)
                 st.altair_chart(draw_combined_temp_humidity_chart(df_json), use_container_width=True)
                 
-                # Đưa ra bảng đánh giá sinh học từng buổi và giải pháp vận hành phần cứng vật lý
                 st.subheader("📋 Báo Cáo Phân Tích Chu Kỳ Buổi & Giải Pháp Kỹ Thuật")
-                df_json_report = analyze_day_by_blocks_rt(df_json, json_matrix)
-                st.dataframe(df_json_report, use_container_width=True, hide_index=True)
                 
-                # Tích hợp cổng gửi báo cáo tóm tắt trực tiếp qua Telegram dạng Markdown
-                if st.button("📤 Gửi Toàn Bộ Báo Cáo JSON Qua Telegram", type="primary", key="btn_tele_json_section"):
-                    if TELE_TOKEN and TELE_CHAT_ID:
-                        json_tele_msg = (
-                            f"📂 *BÁO CÁO CHU KỲ IOT (FILE JSON)*\\n"
-                            f"📦 Tên file: `{uploaded_json.name}`\\n"
-                            f"🎯 Đối tượng: *{json_preset_choice.split()[0]}*\\n"
-                            f"⚠️ Tích lũy Stress: *{json_stress_hours:.1f} giờ*\\n"
-                            f"━━━━━━━━━━━━━━━━━━━━\\n\\n"
-                        )
-                        for _, r_data in df_json_report.iterrows():
-                            json_tele_msg += (
-                                f"Buổi *{r_data['Khoảng Buổi']}*\\n"
-                                f"▪️ Môi trường: {r_data['Nhiệt độ TB']} | {r_data['Độ ẩm TB']}\\n"
-                                f"▪️ VPD TB: *{r_data['VPD Trung Bình']}*\\n"
-                                f"▪️ Đánh giá: *{r_data['Đánh giá sinh học']}*\\n"
-                                f"▪️ Giải pháp: {r_data['Giải pháp kỹ thuật']}\\n"
-                                f"────────────────────\\n"
+                try:
+                    df_json_report = analyze_day_by_blocks_rt(df_json, json_matrix)
+                    st.dataframe(df_json_report, use_container_width=True, hide_index=True)
+                    
+                    # Chỉ hiện nút gửi Telegram khi bảng dữ liệu phân tích thành công
+                    if st.button("📤 Gửi Toàn Bộ Báo Cáo JSON Qua Telegram", type="primary", key="btn_tele_json_section"):
+                        if TELE_TOKEN and TELE_CHAT_ID:
+                            json_tele_msg = (
+                                f"📂 *BÁO CÁO CHU KỲ IOT (FILE JSON)*\\n"
+                                f"📦 Tên file: `{uploaded_json.name}`\\n"
+                                f"🎯 Đối tượng: *{json_preset_choice.split()[0]}*\\n"
+                                f"⚠️ Tích lũy Stress: *{json_stress_hours:.1f} giờ*\\n"
+                                f"━━━━━━━━━━━━━━━━━━━━\\n\\n"
                             )
-                        json_tele_msg += "\\n📊 _Hệ thống tự động xử lý và kết xuất dữ liệu thành công._"
-                        
-                        if send_telegram_message(TELE_TOKEN, TELE_CHAT_ID, json_tele_msg):
-                            st.success("✅ Đã truyền dữ liệu báo cáo tệp tin JSON qua Telegram Bot thành công!")
-                        else:
-                            st.error("❌ Không thể kết nối tới API Telegram.")
+                            for _, r_data in df_json_report.iterrows():
+                                json_tele_msg += (
+                                    f"Buổi *{r_data['Khoảng Buổi']}*\\n"
+                                    f"▪️ Môi trường: {r_data['Nhiệt độ TB']} | {r_data['Độ ẩm TB']}\\n"
+                                    f"▪️ VPD TB: *{r_data['VPD Trung Bình']}*\\n"
+                                    f"▪️ Đánh giá: *{r_data['Đánh giá sinh học']}*\\n"
+                                    f"▪️ Giải pháp: {r_data['Giải pháp kỹ thuật']}\\n"
+                                    f"────────────────────\\n"
+                                )
+                            json_tele_msg += "\\n📊 _Hệ thống tự động xử lý và kết xuất dữ liệu thành công._"
+                            
+                            if send_telegram_message(TELE_TOKEN, TELE_CHAT_ID, json_tele_msg):
+                                st.success("✅ Đã truyền dữ liệu báo cáo tệp tin JSON qua Telegram Bot thành công!")
+                            else:
+                                st.error("❌ Không thể kết nối tới API Telegram.")
+                except Exception as json_report_err:
+                    st.error(f"⚠️ Không thể tạo bảng phân tích chu kỳ từ tệp JSON này. Lỗi: {str(json_report_err)}")
             
         except Exception as err:
             st.error(f"❌ Cấu trúc file JSON bị lỗi cú pháp hoặc sai định dạng. Chi tiết lỗi: {str(err)}")
