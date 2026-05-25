@@ -110,10 +110,10 @@ def analyze_day_by_blocks_rt(history_list, vpd_min, vpd_max, target_day_str):
         avg_v = round(row["VPD (kPa)"], 2)
         
         if avg_v < vpd_min:
-            status = f"⚠️ Quá ẩm (Mục tiêu: {vpd_min}-{vpd_max})"
+            status = f"⚠️ Quá ẩm (Mục tiêu cố định: {vpd_min}-{vpd_max})"
             sol = "Bật quạt đối lưu khí mạnh, mở bớt màng thông gió rèm."
         elif avg_v > vpd_max:
-            status = f"🚨 Quá khô (Mục tiêu: {vpd_min}-{vpd_max})"
+            status = f"🚨 Quá khô (Mục tiêu cố định: {vpd_min}-{vpd_max})"
             sol = "Kéo lưới cắt nắng sương, kích hoạt hệ thống phun mịn hạt."
         else:
             status = f"✅ Lý tưởng ({vpd_min}-{vpd_max})"
