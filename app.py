@@ -116,7 +116,6 @@ if st.session_state.stt_counter == 0:
 tab_future, tab_past = st.tabs(["🔮 MÔ PHỎNG & XEM REALTIME", "📁 QUÉT FILE IOT HỆ THỐNG"])
 
 with tab_future:
-    # Cấu hình [3, 7] để bên phải có không gian trải biểu đồ hàng ngang rộng rãi
     left_col, right_col = st.columns([3, 7])
     with left_col:
         st.markdown("<h3 style='color: #1E8449; font-size: 17px;'>📋 CẤU HÌNH MA TRẬN VPD THEO BUỔI</h3>", unsafe_allow_html=True)
@@ -209,7 +208,6 @@ with tab_future:
             
             m_tab1, m_tab2 = st.tabs(["📈 Đồ thị biến động", "📋 Bảng nhật ký chi tiết"])
             with m_tab1:
-                # use_container_width gán thành False để biểu đồ giữ tỷ lệ phân khối chuẩn
                 st.altair_chart(draw_vpd_chart(df_f, v_min, v_max), use_container_width=False)
             with m_tab2:
                 st.dataframe(df_f[["STT", "Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]].style.apply(style_status_rows, axis=1), use_container_width=True, hide_index=True)
