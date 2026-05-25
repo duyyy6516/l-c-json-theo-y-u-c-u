@@ -4,7 +4,8 @@ import pandas as pd
 def draw_vpd_chart(df, v_min=None, v_max=None):
     """
     Vẽ đường diễn biến VPD phong cách tối giản tuyệt đối (Minimalism).
-    Sửa lỗi tiêu đề và tích hợp tính năng cuộn chuột Phóng to / Thu nhỏ / Di chuyển linh hoạt.
+    Không màu nền, không đổi màu chấm tròn, không bảng chú thích (Legend).
+    Đã tích hợp tính năng cuộn chuột Phóng to / Thu nhỏ / Di chuyển linh hoạt.
     """
     if df.empty:
         return alt.Chart(pd.DataFrame()).mark_blank()
@@ -106,7 +107,7 @@ def draw_combined_temp_humidity_chart(df):
         values=axis_values
     )
 
-    # Đưa cấu trúc Title vào gốc đồ thị trước khi phân tách trục độc lập (Giải quyết triệt để lỗi biến mất chữ)
+    # Đưa cấu trúc Title vào gốc đồ thị trước khi phân tách trục độc lập (Giải quyết lỗi biến mất chữ)
     combined_title = alt.TitleParams(
         text='🌡️ ĐỘNG HỌC MÔI TRƯỜNG: MỐI QUAN HỆ NHIỆT - ẨM CHU KỲ',
         subtitle='Đường Đỏ: Nhiệt độ (°C) [Trục trái]  |  Đường Xanh: Độ ẩm (%) [Trục phải] (Cuộn chuột để thu phóng)',
@@ -128,8 +129,8 @@ def draw_combined_temp_humidity_chart(df):
     h_max = min(100.0, h_max)
 
     humidity_line = base.mark_line(
-        color='#3498DB', \
-        strokeWidth=3, \
+        color='#3498DB', 
+        strokeWidth=3, 
         interpolate='monotone'
     ).encode(
         y=alt.Y('Độ ẩm (%):Q', 
