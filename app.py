@@ -41,6 +41,7 @@ if 'history' not in st.session_state: st.session_state.history = []
 if 'stt_counter' not in st.session_state: st.session_state.stt_counter = 0 
 if 'simulated_time' not in st.session_state: st.session_state.simulated_time = "2026-05-24 07:00:00"
 
+# Các preset mẫu ban đầu (Vẫn cho phép người dùng tinh chỉnh tự do sau khi chọn)
 PLANT_PRESETS = {
     "🍓 Dâu tây Đà Lạt (Giai đoạn trái)": {
         "🌅 Sáng (05h-10h)": (0.5, 0.9), "☀️ Trưa (10h-15h)": (0.7, 1.2), 
@@ -58,6 +59,10 @@ PLANT_PRESETS = {
 
 if 'current_matrix' not in st.session_state:
     st.session_state.current_matrix = PLANT_PRESETS["🍓 Dâu tây Đà Lạt (Giai đoạn trái)"].copy()
+
+# Đồng bộ dữ liệu ma trận khi người dùng đổi loại cây mẫu trên giao diện
+if 'prev_preset' not in st.session_state:
+    st.session_state.prev_preset = "🍓 Dâu tây Đà Lạt (Giai đoạn trái)"
 
 def style_status_rows(row):
     styles = [''] * len(row)
@@ -81,12 +86,24 @@ def trigger_new_data(plant_matrix):
     buoi_hien_tai = get_biological_block(current_sim_datetime.hour)
     v_min, v_max = plant_matrix[buoi_hien_tai]
     
+    # Phân loại trạng thái hiện tại
     if new_vpd >= v_max + 0.5: status_text = "🔴 Quá Nóng"
     elif new_vpd > v_max: status_text = "💛 Nóng"
     elif new_vpd < v_min - 0.2: status_text = "🔵 Quá Ẩm"
     elif new_vpd < v_min: status_text = "🌐 Ẩm"
     else: status_text = "🟩 Lý Tưởng"
     
+    # --- THUẬT TOÁN PHÁT HIỆN SẮP QUÁ NÓNG / SẮP QUÁ ẨM (TIÊN ĐOÁN TRƯỚC 0.1 kPa) ---
+    warning_prefix = ""
+    if v_max < new_vpd < v_max + 0.5:
+        # Nằm trong dải Nóng nhưng chỉ cách Quá Nóng chưa đầy 0.1 kPa
+        if (v_max + 0.5) - new_vpd <= 0.1:
+            warning_prefix = "⚠️ [CẢNH BÁO SỚM]: VPD đang tăng nhanh, SẮP CHẠM NGƯỠNG QUÁ NÓNG NGUY HIỂM! Nguy cơ cháy lá kề cận!\n"
+    elif v_min - 0.2 < new_vpd < v_min:
+        # Nằm trong dải Ẩm nhưng chỉ cách Quá Ẩm chưa đầy 0.1 kPa
+        if new_vpd - (v_min - 0.2) <= 0.1:
+            warning_prefix = "⚠️ [CẢNH BÁO SỚM]: Môi trường tích tụ nước, SẮP CHẠM NGƯỠNG QUÁ ẨM ĐỌNG SƯƠNG! Rủi ro nấm bệnh cực cao!\n"
+
     st.session_state.history.insert(0, {
         "STT": st.session_state.stt_counter, "Ngày": current_date_str,
         "Thời gian mô phỏng": current_sim_datetime, "Hiển thị Giờ": current_sim_datetime.strftime("%H:%M"),
@@ -99,10 +116,12 @@ def trigger_new_data(plant_matrix):
         h_latest = [r for r in st.session_state.history if r["Ngày"] == (unique_days[0] if unique_days else current_date_str)]
         trend, trend_type = predict_vpd_trend_v3(h_latest, current_sim_datetime.hour, plant_matrix)
         
-        msg = (f"🌿 *VPD MONITOR LIỀN MẠCH VẠCH DỌC*\n⏰ {current_date_str} - {current_sim_datetime.strftime('%H:%M')} ({buoi_hien_tai})\n"
+        # Đóng gói chuỗi tin nhắn có chèn header cảnh báo sớm nếu thỏa điều kiện
+        msg = (f"{warning_prefix}"
+               f"🌿 *VPD MONITOR LIỀN MẠCH VẠCH DỌC*\n⏰ {current_date_str} - {current_sim_datetime.strftime('%H:%M')} ({buoi_hien_tai})\n"
                f"📊 Môi trường: {st.session_state.temp}°C | {st.session_state.rh}%\n"
-               f"*VPD thực tế:* *{new_vpd:.2f} kPa* (Ngưỡng lý tưởng buổi: {v_min}-{v_max} kPa)\n"
-               f"📢 *Hiện trạng:* {status_text}\n🔮 *Dự báo:* _{trend}_")
+               f"*VPD thực tế:* *{new_vpd:.2f} kPa* (Cận lý tưởng cấu hình: {v_min}-{v_max} kPa)\n"
+               f"📢 *Hiện trạng:* {status_text}\n🔮 *Dự báo xu hướng:* _{trend}_")
         send_telegram_message(TELE_TOKEN, TELE_CHAT_ID, msg)
     
     next_dt = current_sim_datetime + timedelta(minutes=10)
@@ -110,29 +129,27 @@ def trigger_new_data(plant_matrix):
         st.session_state.is_running = False; st.session_state.is_completed = True   
     st.session_state.simulated_time = next_dt.strftime("%Y-%m-%d %H:%M:%S")
 
-if st.session_state.stt_counter == 0: 
-    trigger_new_data(st.session_state.current_matrix)
-
 tab_future, tab_past = st.tabs(["🔮 MÔ PHỎNG & XEM REALTIME", "📁 QUÉT FILE IOT HỆ THỐNG"])
 
 with tab_future:
     left_col, right_col = st.columns([3, 7])
     with left_col:
         st.markdown("<h3 style='color: #1E8449; font-size: 17px;'>📋 CẤU HÌNH MA TRẬN VPD THEO BUỔI</h3>", unsafe_allow_html=True)
-        preset_choice = st.selectbox("Chọn giống cây áp ma trận mẫu:", list(PLANT_PRESETS.keys()) + ["🛠️ Tùy chỉnh thủ công từng buổi"])
+        preset_choice = st.selectbox("Chọn giống cây áp ma trận mẫu:", list(PLANT_PRESETS.keys()) + ["🛠️ Tùy chỉnh thủ công toàn bộ"])
         
-        if preset_choice != "🛠️ Tùy chỉnh thủ công từng buổi":
+        # Nếu người dùng thay đổi loại cây, cập nhật ngay giá trị mặc định của cây đó vào session_state
+        if preset_choice != "🛠️ Tùy chỉnh thủ công toàn bộ" and preset_choice != st.session_state.prev_preset:
             st.session_state.current_matrix = PLANT_PRESETS[preset_choice].copy()
-            is_dis = True
-        else:
-            is_dis = False
+            st.session_state.prev_preset = preset_choice
 
+        # KHÔNG khóa cứng (disabled=False), cho phép tùy biến thông số trực tiếp trên nền cây đã chọn
         with st.container(border=True):
-            m_sáng = st.slider("🌅 Sáng (05h-10h):", 0.0, 3.0, st.session_state.current_matrix["🌅 Sáng (05h-10h)"], 0.1, disabled=is_dis)
-            m_trưa = st.slider("☀️ Trưa (10h-15h):", 0.0, 3.0, st.session_state.current_matrix["☀️ Trưa (10h-15h)"], 0.1, disabled=is_dis)
-            m_chiều = st.slider("🌇 Chiều (15h-19h):", 0.0, 3.0, st.session_state.current_matrix["🌇 Chiều (15h-19h)"], 0.1, disabled=is_dis)
-            m_tối = st.slider("🌌 Tối (19h-23h):", 0.0, 3.0, st.session_state.current_matrix["🌌 Tối (19h-23h)"], 0.1, disabled=is_dis)
-            m_khuya = st.slider("🌙 Khuya (23h-05h):", 0.0, 3.0, st.session_state.current_matrix["🌙 Khuya (23h-05h)"], 0.1, disabled=is_dis)
+            st.caption("💡 Mẹo: Bạn có thể kéo Slider dưới đây để thay đổi trực tiếp dải VPD tối ưu phù hợp cho loại trái cây của riêng mình.")
+            m_sáng = st.slider("🌅 Sáng (05h-10h):", 0.0, 3.0, st.session_state.current_matrix["🌅 Sáng (05h-10h)"], 0.1)
+            m_trưa = st.slider("☀️ Trưa (10h-15h):", 0.0, 3.0, st.session_state.current_matrix["☀️ Trưa (10h-15h)"], 0.1)
+            m_chiều = st.slider("🌇 Chiều (15h-19h):", 0.0, 3.0, st.session_state.current_matrix["🌇 Chiều (15h-19h)"], 0.1)
+            m_tối = st.slider("🌌 Tối (19h-23h):", 0.0, 3.0, st.session_state.current_matrix["🌌 Tối (19h-23h)"], 0.1)
+            m_khuya = st.slider("🌙 Khuya (23h-05h):", 0.0, 3.0, st.session_state.current_matrix["🌙 Khuya (23h-05h)"], 0.1)
             
             st.session_state.current_matrix = {
                 "🌅 Sáng (05h-10h)": m_sáng, "☀️ Trưa (10h-15h)": m_trưa,
@@ -153,7 +170,6 @@ with tab_future:
                     st.session_state.is_running = False
                     st.rerun()
             
-            # --- NÚT RESET MỚI ĐƯỢC THÊM VÀO ĐÂY ---
             if st.button("🔄 Reset dữ liệu trạm", type="secondary", use_container_width=True):
                 st.session_state.history = []
                 st.session_state.stt_counter = 0
@@ -163,7 +179,9 @@ with tab_future:
                 st.session_state.simulated_time = "2026-05-24 07:00:00"
                 trigger_new_data(st.session_state.current_matrix)
                 st.rerun()
-            # ----------------------------------------
+
+        if st.session_state.stt_counter == 0: 
+            trigger_new_data(st.session_state.current_matrix)
 
         run_interval = 1 if st.session_state.is_running else 999999
         @st.fragment(run_every=run_interval)
@@ -196,11 +214,17 @@ with tab_future:
             if cur_v >= v_max + 0.5:
                 st.markdown(f"<div class='danger-box-red'>🚨 QUÁ NÓNG (>={v_max+0.5} kPa): Bật phun sương hạt mịn full công suất + Xả toàn bộ rèm đỉnh tủ điện!</div>", unsafe_allow_html=True)
             elif cur_v > v_max:
-                st.markdown(f"<div class='danger-box-yellow'>💛 NÓNG ({v_max} - {v_max+0.5} kPa): Kéo lưới cắt nắng, kích hoạt phun sương ngắt quãng làm mát.</div>", unsafe_allow_html=True)
+                if (v_max + 0.5) - cur_v <= 0.1:
+                    st.markdown(f"<div class='danger-box-red'>⚠️ SẮP QUÁ NÓNG (Cách ranh giới {((v_max+0.5)-cur_v):.2f} kPa): Kích hoạt khẩn cấp rèm chắn nắng!</div>", unsafe_allow_html=True)
+                else:
+                    st.markdown(f"<div class='danger-box-yellow'>💛 NÓNG ({v_max} - {v_max+0.5} kPa): Kéo lưới cắt nắng, kích hoạt phun sương ngắt quãng làm mát.</div>", unsafe_allow_html=True)
             elif cur_v < v_min - 0.2:
                 st.markdown(f"<div class='danger-box-darkblue'>🔵 QUÁ ẨM (<{v_min-0.2} kPa): Bật toàn bộ quạt đối lưu, khép bớt hệ thống tưới gốc!</div>", unsafe_allow_html=True)
             elif cur_v < v_min:
-                st.markdown(f"<div class='danger-box-lightblue'>🌐 ẨM ({v_min-0.2} - {v_min} kPa): Hé rèm hông tăng cường lưu thông gió tự nhiên.</div>", unsafe_allow_html=True)
+                if cur_v - (v_min - 0.2) <= 0.1:
+                    st.markdown(f"<div class='danger-box-darkblue'>⚠️ SẮP QUÁ ẨM (Cách ranh giới {(cur_v-(v_min-0.2)):.2f} kPa): Bật toàn bộ quạt hút gió cưỡng bức!</div>", unsafe_allow_html=True)
+                else:
+                    st.markdown(f"<div class='danger-box-lightblue'>🌐 ẨM ({v_min-0.2} - {v_min} kPa): Hé rèm hông tăng cường lưu thông gió tự nhiên.</div>", unsafe_allow_html=True)
             else:
                 st.success("🟩 LÝ TƯỞNG: Môi trường hoàn hảo cho cây quang hợp. Duy trì trạng thái ổn định.")
 
@@ -240,24 +264,21 @@ with tab_past:
     with f_left:
         with st.container(border=True):
             st.markdown("<div class='upload-header'>🌿 THIẾT LẬP MA TRẬN ÁP DỤNG TRÊN FILE</div>", unsafe_allow_html=True)
-            f_preset_choice = st.selectbox("Chọn cấu hình chuẩn áp vào file dữ liệu:", list(PLANT_PRESETS.keys()) + ["🛠️ Tùy chỉnh thủ công từng buổi"], key="sb_file")
+            f_preset_choice = st.selectbox("Chọn cấu hình chuẩn áp vào file dữ liệu:", list(PLANT_PRESETS.keys()) + ["🛠️ Tùy chỉnh thủ công toàn bộ"], key="sb_file")
             
-            if f_preset_choice != "🛠️ Tùy chỉnh thủ công từng buổi":
-                file_matrix = PLANT_PRESETS[f_preset_choice].copy()
-                f_is_dis = True
-            else:
-                if 'file_matrix' not in st.session_state: 
+            if 'file_matrix' not in st.session_state or f_preset_choice != "🛠️ Tùy chỉnh thủ công toàn bộ":
+                if f_preset_choice != "🛠️ Tùy chỉnh thủ công toàn bộ":
+                    st.session_state.file_matrix = PLANT_PRESETS[f_preset_choice].copy()
+                else:
                     st.session_state.file_matrix = PLANT_PRESETS["🍓 Dâu tây Đà Lạt (Giai đoạn trái)"].copy()
-                file_matrix = st.session_state.file_matrix
-                f_is_dis = False
                 
-            f_sáng = st.slider("🌅 Sáng (05h-10h):", 0.0, 3.0, file_matrix["🌅 Sáng (05h-10h)"], 0.1, key="fs_1", disabled=f_is_dis)
-            f_trưa = st.slider("☀️ Trưa (10h-15h):", 0.0, 3.0, file_matrix["☀️ Trưa (10h-15h)"], 0.1, key="fs_2", disabled=f_is_dis)
-            f_chiều = st.slider("🌇 Chiều (15h-19h):", 0.0, 3.0, file_matrix["🌇 Chiều (15h-19h)"], 0.1, key="fs_3", disabled=f_is_dis)
-            f_tối = st.slider("🌌 Tối (19h-23h):", 0.0, 3.0, file_matrix["🌌 Tối (19h-23h)"], 0.1, key="fs_4", disabled=f_is_dis)
-            f_khuya = st.slider("🌙 Khuya (23h-05h):", 0.0, 3.0, file_matrix["🌙 Khuya (23h-05h)"], 0.1, key="fs_5", disabled=f_is_dis)
+            f_sáng = st.slider("🌅 Sáng (05h-10h):", 0.0, 3.0, st.session_state.file_matrix["🌅 Sáng (05h-10h)"], 0.1, key="fs_1")
+            f_trưa = st.slider("☀️ Trưa (10h-15h):", 0.0, 3.0, st.session_state.file_matrix["☀️ Trưa (10h-15h)"], 0.1, key="fs_2")
+            f_chiều = st.slider("🌇 Chiều (15h-19h):", 0.0, 3.0, st.session_state.file_matrix["🌇 Chiều (15h-19h)"], 0.1, key="fs_3")
+            f_tối = st.slider("🌌 Tối (19h-23h):", 0.0, 3.0, st.session_state.file_matrix["🌌 Tối (19h-23h)"], 0.1, key="fs_4")
+            f_khuya = st.slider("🌙 Khuya (23h-05h):", 0.0, 3.0, st.session_state.file_matrix["🌙 Khuya (23h-05h)"], 0.1, key="fs_5")
             
-            file_matrix = {
+            st.session_state.file_matrix = {
                 "🌅 Sáng (05h-10h)": f_sáng, "☀️ Trưa (10h-15h)": f_trưa,
                 "🌇 Chiều (15h-19h)": f_chiều, "🌌 Tối (19h-23h)": f_tối, "🌙 Khuya (23h-05h)": f_khuya
             }
@@ -365,7 +386,7 @@ with tab_past:
             file_status_list = []
             for _, r in df_processed.iterrows():
                 b_name = get_biological_block(r["datetime_internal"].hour)
-                f_min, f_max = file_matrix[b_name]
+                f_min, f_max = st.session_state.file_matrix[b_name]
                 if r["VPD (kPa)"] >= f_max + 0.5: file_status_list.append("🔴 Quá Nóng")
                 elif r["VPD (kPa)"] > f_max: file_status_list.append("💛 Nóng")
                 elif r["VPD (kPa)"] < f_min - 0.2: file_status_list.append("🔵 Quá Ẩm")
@@ -380,7 +401,7 @@ with tab_past:
             m_col3.markdown(f"<div class='metric-card-upload'><span style='font-size:12px;color:grey;'>💧 ĐỘ ẨM TRUNG BÌNH</span><br><b style='font-size:18px;color:#2980B9;'>{df_processed['Độ ẩm (%)'].mean():.1f} %</b></div>", unsafe_allow_html=True)
             m_col4.markdown(f"<div class='metric-card-upload'><span style='font-size:12px;color:grey;'>📋 SỐ ĐIỂM BIỂU ĐỒ</span><br><b style='font-size:18px;color:#2C3E50;'>{len(df_processed)} điểm</b></div>", unsafe_allow_html=True)
 
-            adv_res = calculate_plant_stress_hours(df_processed, file_matrix, time_filter_option)
+            adv_res = calculate_plant_stress_hours(df_processed, st.session_state.file_matrix, time_filter_option)
             st.markdown("<div style='margin-top:15px; font-weight:bold; color:#B71C1C;'>⚠️ ĐÁNH GIÁ CHUYÊN SÂU: ÁP LỰC STRESS KHÍ KHỔNG CỦA CÂY TRỒNG</div>", unsafe_allow_html=True)
             s_col1, s_col2 = st.columns(2)
             with s_col1:
@@ -404,7 +425,7 @@ with tab_past:
                 st.markdown("<div style='font-weight:bold; color:#114B72; margin-bottom:5px;'>📈 CÁC BIỂU ĐỒ ĐỐI CHIẾU TRỰC QUAN</div>", unsafe_allow_html=True)
                 f_tab1, f_tab2 = st.tabs(["🎯 Chỉ số VPD", "🌡️💧 Cặp Nhiệt độ & Độ ẩm lồng nhau"])
                 
-                f_min_sample, f_max_sample = file_matrix["🌅 Sáng (05h-10h)"]
+                f_min_sample, f_max_sample = st.session_state.file_matrix["🌅 Sáng (05h-10h)"]
                 with f_tab1: st.altair_chart(draw_vpd_chart(df_processed, f_min_sample, f_max_sample), use_container_width=True)
                 with f_tab2: st.altair_chart(draw_combined_temp_humidity_chart(df_processed), use_container_width=True)
             with res_right:
@@ -415,7 +436,7 @@ with tab_past:
             st.markdown("---")
             st.markdown("##### 📊 BÁO CÁO PHÂN TÍCH TỔNG HỢP THEO BUỔI CHU KỲ (Dữ liệu gốc từ File)")
             if len(df_for_block_analysis) > 0:
-                df_block_report = analyze_day_by_blocks_rt(df_for_block_analysis.assign(Ngày="Dữ liệu File"), file_matrix, "Dữ liệu File")
+                df_block_report = analyze_day_by_blocks_rt(df_for_block_analysis.assign(Ngày="Dữ liệu File"), st.session_state.file_matrix, "Dữ liệu File")
                 st.dataframe(df_block_report, use_container_width=True, hide_index=True)
                 
                 if st.button("📤 Gửi báo cáo ma trận qua Telegram", type="primary", key="btn_send_file_tele"):
