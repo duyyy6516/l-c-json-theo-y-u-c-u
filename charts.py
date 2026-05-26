@@ -1,22 +1,29 @@
 import altair as alt
 
 def draw_vpd_chart(df, vpd_min, vpd_max):
-    """Vẽ biểu đồ tích hợp đường cong VPD chạy trên nền dải mục tiêu"""
+    """Vẽ biểu đồ tích hợp đường cong VPD chạy chính xác trên nền dải mục tiêu"""
     if df.empty: return alt.Chart().mark_text()
     
-    base = alt.Chart(df).encode(x=alt.X('Hiển thị Giờ:N', sort=None, title='Thời gian mốc trong ngày'))
+    # Tạo thêm 2 cột dữ liệu động trong dataframe phục vụ việc vẽ dải mục tiêu theo trục Y thật
+    df_chart = df.copy()
+    df_chart["VPD_Mục_Tiêu_Min"] = vpd_min
+    df_chart["VPD_Mục_Tiêu_Max"] = vpd_max
     
-    # Tạo dải màu nền xanh lý tưởng bao quanh mục tiêu
-    band = alt.Chart(df).mark_area(opacity=0.15, color='#2ECC71').encode(
+    base = alt.Chart(df_chart).encode(x=alt.X('Hiển thị Giờ:N', sort=None, title='Thời gian mốc trong ngày'))
+    
+    # SỬA LỖI TẠI ĐÂY: Ép dải màu đi theo đúng trục giá trị kPa thực tế của hệ thống
+    band = alt.Chart(df_chart).mark_area(opacity=0.18, color='#2ECC71').encode(
         x=alt.X('Hiển thị Giờ:N', sort=None),
-        y=alt.value(vpd_max * 120),  
-        y2=alt.value(vpd_min * 120)
+        y=alt.Y('VPD_Mục_Tiêu_Max:Q'),
+        y2=alt.Y2('VPD_Mục_Tiêu_Min:Q')
     )
     
+    # Đường line đồ thị VPD thực tế
     line = base.mark_line(strokeWidth=3.5, color='#E67E22', interpolate='monotone').encode(
-        y=alt.Y('VPD (kPa):Q', title='Áp suất hơi bão hòa VPD (kPa)')
+        y=alt.Y('VPD (kPa):Q', title='Áp suất hơi bão hòa VPD (kPa)', scale=alt.Scale(zero=True))
     )
     
+    # Điểm chấm tròn dữ liệu
     points = base.mark_circle(size=70, color='#D35400').encode(
         y='VPD (kPa):Q',
         tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)', 'Độ ẩm (%)', 'VPD (kPa)', 'Trạng thái']
@@ -25,7 +32,6 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
     return alt.layer(band, line, points).properties(height=320).configure_axis(labelFontSize=11, titleFontSize=12)
 
 def draw_temperature_chart(df):
-    """Vẽ biểu đồ lịch sử nhiệt độ riêng biệt tại Tab 2"""
     if df.empty: return alt.Chart().mark_text()
     return alt.Chart(df).mark_line(color='#E74C3C', strokeWidth=2.5, interpolate='monotone').encode(
         x=alt.X('Hiển thị Giờ:N', sort=None, title='Giờ'),
@@ -34,7 +40,6 @@ def draw_temperature_chart(df):
     ).properties(height=180)
 
 def draw_humidity_chart(df):
-    """Vẽ biểu đồ lịch sử độ ẩm không khí riêng biệt tại Tab 2"""
     if df.empty: return alt.Chart().mark_text()
     return alt.Chart(df).mark_line(color='#3498DB', strokeWidth=2.5, interpolate='monotone').encode(
         x=alt.X('Hiển thị Giờ:N', sort=None, title='Giờ'),
