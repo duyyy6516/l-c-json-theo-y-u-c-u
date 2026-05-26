@@ -2,22 +2,24 @@ import streamlit as st
 import pandas as pd
 import json
 from datetime import datetime, timedelta
+import sys
+import os
 from streamlit_autorefresh import st_autorefresh
+
+# Tự động tìm kiếm module ở thư mục hiện tại
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from calculations import calculate_vpd, get_weather_by_time
 from services import send_telegram_message, get_quick_solution
 from analytics import (
-    analyze_day_by_blocks_dynamic, 
-    predict_vpd_trend_dynamic, 
-    calculate_static_plant_stress, 
-    get_biological_block
+    analyze_day_by_blocks_rt, 
+    predict_vpd_trend_v3, \
+    calculate_plant_stress_hours
 )
 from charts import draw_vpd_chart, draw_temperature_chart, draw_humidity_chart
 
-TELE_TOKEN = "8917951413:AAE6LKUEfYEYiQrFWGoKsQn0tumZc_XbcHg"
-TELE_CHAT_ID = "7290661009"
-
-st.set_page_config(page_title="VPD Hybrid Farm Analytics", page_icon="🌿", layout="wide")
+# --- CẤU HÌNH BAN ĐẦU ---
+st.set_page_config(page_title="VPD Farm Analytics", page_icon="🌿", layout="wide")
 
 st.markdown("""
     <style>
@@ -32,6 +34,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# THIẾT LẬP MA TRẬN BUỔI CHO CÁC LOẠI CÂY
 DANH_SACH_MA_TRAN_CAY = {
     "🍓 Dâu tây Đà Lạt (Hoa / Trái)": {
         "🌅 Sáng (05h - 10h)": (0.6, 1.0), "☀️ Trưa (10h - 15h)": (0.8, 1.2), "🌇 Chiều (15h - 19h)": (0.6, 1.0), "🌌 Tối (19h - 23h)": (0.4, 0.8), "🌙 Khuya (23h - 05h)": (0.3, 0.6)
@@ -47,6 +50,9 @@ DANH_SACH_MA_TRAN_CAY = {
     }
 }
 plant_keys = list(DANH_SACH_MA_TRAN_CAY.keys())
+
+TELE_TOKEN = "8917951413:AAE6LKUEfYEYiQrFWGoKsQn0tumZc_XbcHg"
+TELE_CHAT_ID = "7290661009"
 
 if 'history' not in st.session_state: st.session_state.history = []
 if 'stt_counter' not in st.session_state: st.session_state.stt_counter = 0 
@@ -65,20 +71,27 @@ def style_status_rows(row):
     elif "Quá ẩm" in status: styles[row.index.get_loc('Trạng thái')] = 'background-color: #E3F2FD; color: #0D47A1; font-weight: bold;'
     return styles
 
+def get_block_by_hour(h):
+    if 5 <= h < 10: return "🌅 Sáng (05h - 10h)"
+    elif 10 <= h < 15: return "☀️ Trưa (10h - 15h)"
+    elif 15 <= h < 19: return "🌇 Chiều (15h - 19h)"
+    elif 19 <= h < 23: return "🌌 Tối (19h - 23h)"
+    else: return "🌙 Khuya (23h - 05h)"
+
 def trigger_next_manual_point():
     current_sim_dt = datetime.strptime(st.session_state.simulated_time, "%Y-%m-%d %H:%M:%S")
     st.session_state.temp, st.session_state.rh = get_weather_by_time(current_sim_dt)
     st.session_state.stt_counter += 1
     
     new_vpd = calculate_vpd(st.session_state.temp, st.session_state.rh)
-    block_name = get_biological_block(current_sim_dt.hour)
+    block_name = get_block_by_hour(current_sim_dt.hour)
     vpd_min, vpd_max = st.session_state.current_matrix[block_name]
     
     status_text = "⚠️ Quá ẩm" if new_vpd < vpd_min else ("✅ Lý tưởng" if new_vpd <= vpd_max else "🚨 Quá khô")
     tele_status = "🟦 QUÁ ẨM" if new_vpd < vpd_min else ("🟩 LÝ TƯỞNG" if new_vpd <= vpd_max else "🟥 QUÁ KHÔ")
     
     st.session_state.history.insert(0, {
-        "STT": st.session_state.stt_counter, "Ngày": current_sim_dt.strftime("Ngày %d/%m"),
+        "STT": st.session_state.stt_counter, "Bag": current_sim_dt.strftime("Ngày %d/%m"),
         "Thời gian mô phỏng": current_sim_dt, "Hiển thị Giờ": current_sim_dt.strftime("%H:%M"),
         "datetime_internal": current_sim_dt, "Nhiệt độ (°C)": st.session_state.temp, "Độ ẩm (%)": st.session_state.rh,
         "VPD (kPa)": round(new_vpd, 2), "Trạng thái": status_text
@@ -86,9 +99,9 @@ def trigger_next_manual_point():
     
     if TELE_TOKEN and TELE_CHAT_ID:
         sol = get_quick_solution(new_vpd, vpd_min, vpd_max, current_sim_dt.hour)
-        unique_days = sorted(list(set([r["Ngày"] for r in st.session_state.history])), reverse=True)
-        hist_latest = [r for r in st.session_state.history if r["Ngày"] == (unique_days[0] if unique_days else current_sim_dt.strftime("Ngày %d/%m"))]
-        trend, trend_type = predict_vpd_trend_dynamic(hist_latest, current_sim_dt.hour, st.session_state.current_matrix)
+        unique_days = sorted(list(set([r["Bag"] for r in st.session_state.history])), reverse=True)
+        hist_latest = [r for r in st.session_state.history if r["Bag"] == (unique_days[0] if unique_days else current_sim_dt.strftime("Ngày %d/%m"))]
+        trend, trend_type = predict_vpd_trend_v3(hist_latest, current_sim_dt.hour, vpd_min, vpd_max)
         
         telegram_msg = (
             f"🌿 *HỆ THỐNG VPD ĐỘNG ĐÀ LẠT*\n⏰ Buổi: {block_name} | Giờ: {current_sim_dt.strftime('%H:%M')}\n"
@@ -146,7 +159,7 @@ with tab_future:
                 st.session_state.current_matrix[block] = nv
 
         curr_sim_dt = datetime.strptime(st.session_state.simulated_time, "%Y-%m-%d %H:%M:%S")
-        curr_block = get_biological_block(curr_sim_dt.hour)
+        curr_block = get_block_by_hour(curr_sim_dt.hour)
         b_min, b_max = st.session_state.current_matrix[curr_block]
         
         with st.container(border=True):
@@ -157,7 +170,7 @@ with tab_future:
 
         if st.session_state.stt_counter > 0:
             vpd_now = calculate_vpd(st.session_state.temp, st.session_state.rh)
-            trend, trend_type = predict_vpd_trend_dynamic([r for r in st.session_state.history], curr_sim_dt.hour, st.session_state.current_matrix)
+            trend, trend_type = predict_vpd_trend_v3([r for r in st.session_state.history], curr_sim_dt.hour, b_min, b_max)
             if trend_type == "danger_red": st.markdown(f"<div class='danger-box-red'>🚨 {trend}</div>", unsafe_allow_html=True)
             elif trend_type == "danger_blue": st.markdown(f"<div class='danger-box-blue'>🚨 {trend}</div>", unsafe_allow_html=True)
             
@@ -167,9 +180,9 @@ with tab_future:
     with right_col:
         st.markdown("<h3 style='color: #2E7D32; font-size: 18px;'>📊 TRUNG TÂM PHÂN TÍCH MA TRẬN CHU KỲ</h3>", unsafe_allow_html=True)
         if not st.session_state.history:
-            st.info("Chưa có số liệu. Vui lòng bấm nút kích hoạt hoặc bật Auto để bắt đầu ghi nhật ký.")
+            st.info("ChChưa có số liệu. Vui lòng bấm nút cập nhật hoặc bật Auto để bắt đầu ghi nhật ký.")
         else:
-            u_days = sorted(list(set([r["Ngày"] for r in st.session_state.history])), reverse=True)
+            u_days = sorted(list(set([r["Bag"] for r in st.session_state.history])), reverse=True)
             f1, f2 = st.columns([7, 3])
             with f1: s_day = st.selectbox("Lọc ngày:", u_days, label_visibility="collapsed")
             with f2:
@@ -178,13 +191,13 @@ with tab_future:
                     st.session_state.is_completed = False; st.session_state.temp = 0.0; st.session_state.rh = 0.0; st.rerun()
 
             df_all = pd.DataFrame(st.session_state.history)
-            df_fil = df_all[df_all["Ngày"] == s_day].iloc[::-1].copy()
+            df_fil = df_all[df_all["Bag"] == s_day].iloc[::-1].copy()
 
             m_t1, m_t2, m_t3 = st.tabs(["📈 Biểu đồ trực quan", "📊 Đối chiếu Ma Trận Buổi", "📋 Nhật ký chi tiết"])
             with m_t1: 
-                # ĐÃ SỬA: Truyền ma trận hiện tại để vẽ dải mục tiêu động uốn lượn
                 st.altair_chart(draw_vpd_chart(df_fil, st.session_state.current_matrix), use_container_width=True)
-            with m_t2: st.dataframe(analyze_day_by_blocks_dynamic(st.session_state.history, st.session_state.current_matrix, s_day), use_container_width=True, hide_index=True)
+            with m_t2: 
+                st.dataframe(analyze_day_by_blocks_rt(st.session_state.history, b_min, b_max, s_day), use_container_width=True, hide_index=True)
             with m_t3:
                 styled_df = df_fil[["STT", "Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]].style.apply(style_status_rows, axis=1)
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
@@ -252,12 +265,11 @@ with tab_past:
                 k2.metric("Nhiệt độ TB", f"{df_calc['Nhiệt độ (°C)'].mean():.1f} °C")
                 k3.metric("Độ ẩm TB", f"{df_calc['Độ ẩm (%)'].mean():.1f} %")
 
-                stress = calculate_static_plant_stress(df_calc, f_vpd_range[0], f_vpd_range[1], t_filter_opt)
+                stress = calculate_plant_stress_hours(df_calc, f_vpd_range[0], f_vpd_range[1], t_filter_opt)
                 st.markdown(f"⚠️ **Đánh giá Agronomy:** Tích lũy Stress Khô: `{stress['dry_hours']} giờ` | Tích lũy Stress Ẩm: `{stress['wet_hours']} giờ` (Nguy cơ bùng phát nấm: `{stress['fungus_risk']}%`)")
 
                 m_v1, m_v2, m_v3 = st.tabs(["📉 Biểu đồ tích hợp VPD", "🌡️ Biểu đồ Nhiệt độ / Độ ẩm rời", "📋 Bảng dữ liệu trích xuất"])
                 with m_v1: 
-                    # ĐÃ SỬA: Tạo cấu hình phẳng cố định đồng bộ cho tab xem file lịch sử
                     static_matrix = {
                         "🌅 Sáng (05h - 10h)": f_vpd_range, "☀️ Trưa (10h - 15h)": f_vpd_range,
                         "🌇 Chiều (15h - 19h)": f_vpd_range, "🌌 Tối (19h - 23h)": f_vpd_range, "🌙 Khuya (23h - 05h)": f_vpd_range
