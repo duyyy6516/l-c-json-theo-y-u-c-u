@@ -9,14 +9,18 @@ from streamlit_autorefresh import st_autorefresh
 # Tự động tìm kiếm module ở thư mục hiện tại
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from calculations import calculate_vpd, get_weather_by_time
-from services import send_telegram_message, get_quick_solution
-from analytics import (
-    analyze_day_by_blocks_rt, 
-    predict_vpd_trend_v3, \
-    calculate_plant_stress_hours
-)
-from charts import draw_vpd_chart, draw_temperature_chart, draw_humidity_chart
+try:
+    from calculations import calculate_vpd, get_weather_by_time
+    from services import send_telegram_message, get_quick_solution
+    from analytics import (
+        analyze_day_by_blocks_rt, 
+        predict_vpd_trend_v3, \
+        calculate_plant_stress_hours
+    )
+    from charts import draw_vpd_chart, draw_temperature_chart, draw_humidity_chart
+except ModuleNotFoundError as e:
+    st.error(f"❌ Không tìm thấy module bổ trợ: {e.name}")
+    st.stop()
 
 # --- CẤU HÌNH BAN ĐẦU ---
 st.set_page_config(page_title="VPD Farm Analytics", page_icon="🌿", layout="wide")
@@ -90,17 +94,23 @@ def trigger_next_manual_point():
     status_text = "⚠️ Quá ẩm" if new_vpd < vpd_min else ("✅ Lý tưởng" if new_vpd <= vpd_max else "🚨 Quá khô")
     tele_status = "🟦 QUÁ ẨM" if new_vpd < vpd_min else ("🟩 LÝ TƯỞNG" if new_vpd <= vpd_max else "🟥 QUÁ KHÔ")
     
+    # FIX: Đổi từ "Bag" thành "Ngày" thống nhất đồng bộ toàn bộ app
     st.session_state.history.insert(0, {
-        "STT": st.session_state.stt_counter, "Bag": current_sim_dt.strftime("Ngày %d/%m"),
-        "Thời gian mô phỏng": current_sim_dt, "Hiển thị Giờ": current_sim_dt.strftime("%H:%M"),
-        "datetime_internal": current_sim_dt, "Nhiệt độ (°C)": st.session_state.temp, "Độ ẩm (%)": st.session_state.rh,
-        "VPD (kPa)": round(new_vpd, 2), "Trạng thái": status_text
+        "STT": st.session_state.stt_counter, 
+        "Ngày": current_sim_dt.strftime("Ngày %d/%m"),
+        "Thời gian mô phỏng": current_sim_dt, 
+        "Hiển thị Giờ": current_sim_dt.strftime("%H:%M"),
+        "datetime_internal": current_sim_dt, 
+        "Nhiệt độ (°C)": st.session_state.temp, 
+        "Độ ẩm (%)": st.session_state.rh,
+        "VPD (kPa)": round(new_vpd, 2), 
+        "Trạng thái": status_text
     })
     
     if TELE_TOKEN and TELE_CHAT_ID:
         sol = get_quick_solution(new_vpd, vpd_min, vpd_max, current_sim_dt.hour)
-        unique_days = sorted(list(set([r["Bag"] for r in st.session_state.history])), reverse=True)
-        hist_latest = [r for r in st.session_state.history if r["Bag"] == (unique_days[0] if unique_days else current_sim_dt.strftime("Ngày %d/%m"))]
+        unique_days = sorted(list(set([r["Ngày"] for r in st.session_state.history])), reverse=True)
+        hist_latest = [r for r in st.session_state.history if r["Ngày"] == (unique_days[0] if unique_days else current_sim_dt.strftime("Ngày %d/%m"))]
         trend, trend_type = predict_vpd_trend_v3(hist_latest, current_sim_dt.hour, vpd_min, vpd_max)
         
         telegram_msg = (
@@ -180,9 +190,9 @@ with tab_future:
     with right_col:
         st.markdown("<h3 style='color: #2E7D32; font-size: 18px;'>📊 TRUNG TÂM PHÂN TÍCH MA TRẬN CHU KỲ</h3>", unsafe_allow_html=True)
         if not st.session_state.history:
-            st.info("ChChưa có số liệu. Vui lòng bấm nút cập nhật hoặc bật Auto để bắt đầu ghi nhật ký.")
+            st.info("Chưa có số liệu. Vui lòng bấm nút cập nhật hoặc bật Auto để bắt đầu ghi nhật ký.")
         else:
-            u_days = sorted(list(set([r["Bag"] for r in st.session_state.history])), reverse=True)
+            u_days = sorted(list(set([r["Ngày"] for r in st.session_state.history])), reverse=True)
             f1, f2 = st.columns([7, 3])
             with f1: s_day = st.selectbox("Lọc ngày:", u_days, label_visibility="collapsed")
             with f2:
@@ -191,7 +201,7 @@ with tab_future:
                     st.session_state.is_completed = False; st.session_state.temp = 0.0; st.session_state.rh = 0.0; st.rerun()
 
             df_all = pd.DataFrame(st.session_state.history)
-            df_fil = df_all[df_all["Bag"] == s_day].iloc[::-1].copy()
+            df_fil = df_all[df_all["Ngày"] == s_day].iloc[::-1].copy()
 
             m_t1, m_t2, m_t3 = st.tabs(["📈 Biểu đồ trực quan", "📊 Đối chiếu Ma Trận Buổi", "📋 Nhật ký chi tiết"])
             with m_t1: 
