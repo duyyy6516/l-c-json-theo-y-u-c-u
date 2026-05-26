@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import json
 from datetime import datetime, timedelta
+# Thư viện dùng để đếm ngược thời gian tự động
+from streamlit_autorefresh import st_autorefresh
 
 # Import các module từ bộ kho hệ thống nội bộ
 from calculations import calculate_vpd, get_weather_by_time
@@ -28,6 +30,7 @@ st.markdown("""
     .stTabs [data-baseweb="tab"] { height: 45px; font-weight: bold; font-size: 16px; }
     .danger-box-red { padding: 12px; background-color: #FFEBEE; border-left: 6px solid #FF1744; color: #B71C1C; font-weight: bold; font-size: 15px; border-radius: 4px; margin-bottom: 8px; }
     .danger-box-blue { padding: 12px; background-color: #E3F2FD; border-left: 6px solid #2979FF; color: #0D47A1; font-weight: bold; font-size: 15px; border-radius: 4px; margin-bottom: 8px; }
+    .timer-box { padding: 10px; background-color: #FFF3E0; border: 1px solid #FFB74D; border-radius: 5px; text-align: center; font-size: 16px; font-weight: bold; color: #E65100; margin-bottom: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -55,6 +58,7 @@ if 'simulated_time' not in st.session_state: st.session_state.simulated_time = "
 if 'current_matrix' not in st.session_state: st.session_state.current_matrix = DANH_SACH_MA_TRAN_CAY[plant_keys[0]].copy()
 if 'temp' not in st.session_state: st.session_state.temp = 0.0
 if 'rh' not in st.session_state: st.session_state.rh = 0.0
+if 'next_refresh_time' not in st.session_state: st.session_state.next_refresh_time = datetime.now() + timedelta(seconds=10)
 
 def style_status_rows(row):
     styles = [''] * len(row)
@@ -103,25 +107,40 @@ def trigger_next_manual_point():
     if next_dt.hour == 0 and next_dt.minute == 0:
         st.session_state.is_completed = True
     st.session_state.simulated_time = next_dt.strftime("%Y-%m-%d %H:%M:%S")
+    st.session_state.next_refresh_time = datetime.now() + timedelta(seconds=10)
 
 tab_future, tab_past = st.tabs(["🔮 XEM DỰ BÁO & THEO DÕI TƯƠNG LAI", "📁 TẢI FILE & PHÂN TÍCH LỊCH SỬ"])
 
 # --------------------------------------------------------
-# TAB 1: MA TRẬN ĐỘNG (BẤM THỦ CÔNG - KHÔNG ĐẾM GIÂY)
+# TAB 1: MA TRẬN ĐỘNG (BẤM THỦ CÔNG HOẶC HẸN GIỜ TỰ ĐỘNG CHẠY)
 # --------------------------------------------------------
 with tab_future:
     left_col, right_col = st.columns([3.8, 6.2])
     with left_col:
-        st.markdown("<h3 style='color: #2E7D32; font-size: 18px;'>🤖 TRẠM ĐIỀU HÀNH THỦ CÔNG (ĐỘNG CHU KỲ)</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #2E7D32; font-size: 18px;'>🤖 TRẠM ĐIỀU HÀNH HỆ THỐNG (ĐỘNG CHU KỲ)</h3>", unsafe_allow_html=True)
+        
         with st.container(border=True):
+            st.markdown("**⚙️ Chế độ sinh dữ liệu:**")
+            run_mode = st.radio("Lựa chọn phương thức hoạt động:", ["Manual (Bấm nút thủ công)", "Auto (Tự động sinh dữ liệu sau mỗi 10 giây)"], label_visibility="collapsed")
+            
             if st.session_state.is_completed:
                 st.success("🏁 Đã hoàn thành chu kỳ ngày mô phỏng!")
                 if st.button("🔄 Khởi động lại ngày mới", type="primary", use_container_width=True):
                     st.session_state.simulated_time = "2026-05-24 07:00:00"
                     st.session_state.is_completed = False; st.rerun()
             else:
-                if st.button("⏭️ Cập nhật điểm kế tiếp (Thêm 10 phút)", type="primary", use_container_width=True):
-                    trigger_next_manual_point(); st.rerun()
+                if run_mode == "Manual (Bấm nút thủ công)":
+                    if st.button("⏭️ Cập nhật điểm kế tiếp (Thêm 10 phút)", type="primary", use_container_width=True):
+                        trigger_next_manual_point(); st.rerun()
+                else:
+                    # Logic tự động đếm ngược và kích hoạt điểm kế tiếp
+                    time_left = int((st.session_state.next_refresh_time - datetime.now()).total_seconds())
+                    if time_left <= 0:
+                        trigger_next_manual_point()
+                        st.rerun()
+                    else:
+                        st.markdown(f"<div class='timer-box'>⏳ Dữ liệu mới sẽ tự động sinh ra sau: {time_left} giây nữa</div>", unsafe_allow_html=True)
+                        st_autorefresh(interval=1000, key="vpd_counter_refresh") # Refresh mỗi 1 giây để cập nhật đồng hồ
 
         with st.container(border=True):
             st.markdown("**1. Chọn mô hình cây trồng:**")
@@ -156,7 +175,7 @@ with tab_future:
     with right_col:
         st.markdown("<h3 style='color: #2E7D32; font-size: 18px;'>📊 TRUNG TÂM PHÂN TÍCH MA TRẬN CHU KỲ</h3>", unsafe_allow_html=True)
         if not st.session_state.history:
-            st.info("Chưa có số liệu. Vui lòng bấm nút '⏭️ Cập nhật điểm kế tiếp' để bắt đầu ghi nhật ký.")
+            st.info("Chưa có số liệu. Vui lòng bấm nút kích hoạt hoặc bật Auto để bắt đầu ghi nhật ký.")
         else:
             u_days = sorted(list(set([r["Ngày"] for r in st.session_state.history])), reverse=True)
             f1, f2 = st.columns([7, 3])
@@ -177,7 +196,7 @@ with tab_future:
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
 # --------------------------------------------------------
-# TAB 2: TẢI FILE IOT (XỬ LÝ DẢI CỐ ĐỊNH PHIÊN BẢN GỐC + KHỬ LỖI .DT)
+# TAB 2: TẢI FILE IOT (GIỮ NGUYÊN BẢN CŨ ỔN ĐỊNH CỦA BẠN 100%)
 # --------------------------------------------------------
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 19px;'>📁 PHÂN TÍCH FILE IOT THEO DẢI CỐ ĐỊNH</h3>", unsafe_allow_html=True)
@@ -193,7 +212,6 @@ with tab_past:
 
     if uploaded_file:
         try:
-            # Thuật toán nhận diện và đọc cấu trúc file của bản cũ để tránh lỗi nứt gãy dữ liệu thô
             if uploaded_file.name.endswith('.json'):
                 raw_data = json.load(uploaded_file)
                 if isinstance(raw_data, dict):
@@ -214,16 +232,13 @@ with tab_past:
             if not c_time: c_time = df_up.columns[2]
 
             df_calc = pd.DataFrame()
-            # Khử toàn bộ khoảng trắng thừa, ép sang dạng chuỗi trước khi ép kiểu ngày tháng an toàn bằng errors='coerce'
             df_calc["datetime_internal"] = pd.to_datetime(df_up[c_time].astype(str).str.strip(), errors='coerce')
             df_calc["Nhiệt độ (°C)"] = pd.to_numeric(df_up[c_t], errors='coerce')
             df_calc["Độ ẩm (%)"] = pd.to_numeric(df_up[c_h], errors='coerce')
-            
-            # Xóa các dòng rỗng (NaN/NaT) triệt để giúp loại bỏ hoàn toàn lỗi bộ truy cập .dt accessor
             df_calc = df_calc.dropna(subset=["datetime_internal", "Nhiệt độ (°C)", "Độ ẩm (%)"]).sort_values("datetime_internal").copy()
             
             if df_calc.empty:
-                st.error("❌ Không trích xuất được dữ liệu hợp lệ từ File (Cột thời gian lỗi hoặc file trống).")
+                st.error("❌ Không trích xuất được dữ liệu hợp lệ từ File.")
                 st.stop()
                 
             df_calc["VPD (kPa)"] = df_calc.apply(lambda r: calculate_vpd(r["Nhiệt độ (°C)"], r["Độ ẩm (%)"]), axis=1)
