@@ -2,10 +2,8 @@ import streamlit as st
 import pandas as pd
 import json
 from datetime import datetime, timedelta
-# Thư viện dùng để đếm ngược thời gian tự động
 from streamlit_autorefresh import st_autorefresh
 
-# Import các module từ bộ kho hệ thống nội bộ
 from calculations import calculate_vpd, get_weather_by_time
 from services import send_telegram_message, get_quick_solution
 from analytics import (
@@ -34,7 +32,6 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# MA TRẬN ĐỘNG CHO TAB 1
 DANH_SACH_MA_TRAN_CAY = {
     "🍓 Dâu tây Đà Lạt (Hoa / Trái)": {
         "🌅 Sáng (05h - 10h)": (0.6, 1.0), "☀️ Trưa (10h - 15h)": (0.8, 1.2), "🌇 Chiều (15h - 19h)": (0.6, 1.0), "🌌 Tối (19h - 23h)": (0.4, 0.8), "🌙 Khuya (23h - 05h)": (0.3, 0.6)
@@ -111,9 +108,6 @@ def trigger_next_manual_point():
 
 tab_future, tab_past = st.tabs(["🔮 XEM DỰ BÁO & THEO DÕI TƯƠNG LAI", "📁 TẢI FILE & PHÂN TÍCH LỊCH SỬ"])
 
-# --------------------------------------------------------
-# TAB 1: MA TRẬN ĐỘNG (BẤM THỦ CÔNG HOẶC HẸN GIỜ TỰ ĐỘNG CHẠY)
-# --------------------------------------------------------
 with tab_future:
     left_col, right_col = st.columns([3.8, 6.2])
     with left_col:
@@ -133,14 +127,12 @@ with tab_future:
                     if st.button("⏭️ Cập nhật điểm kế tiếp (Thêm 10 phút)", type="primary", use_container_width=True):
                         trigger_next_manual_point(); st.rerun()
                 else:
-                    # Logic tự động đếm ngược và kích hoạt điểm kế tiếp
                     time_left = int((st.session_state.next_refresh_time - datetime.now()).total_seconds())
                     if time_left <= 0:
-                        trigger_next_manual_point()
-                        st.rerun()
+                        trigger_next_manual_point(); st.rerun()
                     else:
                         st.markdown(f"<div class='timer-box'>⏳ Dữ liệu mới sẽ tự động sinh ra sau: {time_left} giây nữa</div>", unsafe_allow_html=True)
-                        st_autorefresh(interval=1000, key="vpd_counter_refresh") # Refresh mỗi 1 giây để cập nhật đồng hồ
+                        st_autorefresh(interval=1000, key="vpd_counter_refresh")
 
         with st.container(border=True):
             st.markdown("**1. Chọn mô hình cây trồng:**")
@@ -189,15 +181,14 @@ with tab_future:
             df_fil = df_all[df_all["Ngày"] == s_day].iloc[::-1].copy()
 
             m_t1, m_t2, m_t3 = st.tabs(["📈 Biểu đồ trực quan", "📊 Đối chiếu Ma Trận Buổi", "📋 Nhật ký chi tiết"])
-            with m_t1: st.altair_chart(draw_vpd_chart(df_fil, b_min, b_max), use_container_width=True)
+            with m_t1: 
+                # ĐÃ SỬA: Truyền ma trận hiện tại để vẽ dải mục tiêu động uốn lượn
+                st.altair_chart(draw_vpd_chart(df_fil, st.session_state.current_matrix), use_container_width=True)
             with m_t2: st.dataframe(analyze_day_by_blocks_dynamic(st.session_state.history, st.session_state.current_matrix, s_day), use_container_width=True, hide_index=True)
             with m_t3:
                 styled_df = df_fil[["STT", "Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]].style.apply(style_status_rows, axis=1)
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
-# --------------------------------------------------------
-# TAB 2: TẢI FILE IOT (GIỮ NGUYÊN BẢN CŨ ỔN ĐỊNH CỦA BẠN 100%)
-# --------------------------------------------------------
 with tab_past:
     st.markdown("<h3 style='color: #1A5276; font-size: 19px;'>📁 PHÂN TÍCH FILE IOT THEO DẢI CỐ ĐỊNH</h3>", unsafe_allow_html=True)
     tl, tr = st.columns([5, 5])
@@ -265,7 +256,13 @@ with tab_past:
                 st.markdown(f"⚠️ **Đánh giá Agronomy:** Tích lũy Stress Khô: `{stress['dry_hours']} giờ` | Tích lũy Stress Ẩm: `{stress['wet_hours']} giờ` (Nguy cơ bùng phát nấm: `{stress['fungus_risk']}%`)")
 
                 m_v1, m_v2, m_v3 = st.tabs(["📉 Biểu đồ tích hợp VPD", "🌡️ Biểu đồ Nhiệt độ / Độ ẩm rời", "📋 Bảng dữ liệu trích xuất"])
-                with m_v1: st.altair_chart(draw_vpd_chart(df_calc, f_vpd_range[0], f_vpd_range[1]), use_container_width=True)
+                with m_v1: 
+                    # ĐÃ SỬA: Tạo cấu hình phẳng cố định đồng bộ cho tab xem file lịch sử
+                    static_matrix = {
+                        "🌅 Sáng (05h - 10h)": f_vpd_range, "☀️ Trưa (10h - 15h)": f_vpd_range,
+                        "🌇 Chiều (15h - 19h)": f_vpd_range, "🌌 Tối (19h - 23h)": f_vpd_range, "🌙 Khuya (23h - 05h)": f_vpd_range
+                    }
+                    st.altair_chart(draw_vpd_chart(df_calc, static_matrix), use_container_width=True)
                 with m_v2:
                     st.altair_chart(draw_temperature_chart(df_calc), use_container_width=True)
                     st.altair_chart(draw_humidity_chart(df_calc), use_container_width=True)
